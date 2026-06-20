@@ -206,7 +206,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันแก้โค้ดค้าง + บล็อกเสียงพร้อพชัวร์ๆ) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันเจาะจงสเก็ตบอร์ดตรงจุด) ] ====================
 
 local function checkPlayerCurrentSound(targetPlayer)
     if not targetPlayer then return nil end
@@ -218,7 +218,19 @@ local function checkPlayerCurrentSound(targetPlayer)
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
     
-    -- บัญชีดำชื่อเสียงขยะจากพวกบอร์ดและรถ (เอาคำว่า sound ออกเพราะไปทับชื่อวิทยุบางตัว)
+    -- 🛑 บัญชีดำ ID เสียงเอฟเฟกต์เฉพาะของสเก็ตบอร์ด/รถ/หวอ ในแมพ Brookhaven (ไม่รวมเพลงจริง)
+    local AssetBlacklist = {
+        ["rbxassetid://1610486053"] = true, -- เสียงล้อบอร์ดไถ (Roll)
+        ["1610486053"] = true,
+        ["rbxassetid://4743282245"] = true, -- เสียงเครื่องยนต์สเก็ตบอร์ดไฟฟ้า
+        ["4743282245"] = true,
+        ["rbxassetid://152820353"] = true,  -- เสียงเบรก/ไถล
+        ["152820353"] = true,
+        ["rbxassetid://276709323"] = true,  -- เสียงสตาร์ทเครื่องยนต์รถในแมพ
+        ["276709323"] = true
+    }
+    
+    -- บัญชีดำชื่อออบเจกต์เสียงระบบ (เอาคำว่า sound ออกแล้ว เพื่อไม่ให้ไปทับป้ายวิทยุจริง)
     local NameBlacklist = {
         ["roll"] = true, ["clips"] = true, ["engine"] = true, 
         ["pitch"] = true, ["drive"] = true, ["skateboardsound"] = true, ["hoverdrive"] = true,
@@ -230,35 +242,21 @@ local function checkPlayerCurrentSound(targetPlayer)
         if success and descendants then
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" then
-                    if obj.IsPlaying and (obj.Looped or obj.TimeLength > 10 or obj.TimeLength == 0) then
+                    
+                    -- 🔥 หัวใจหลัก: เพลงจริงต้องกำลังเล่น และมีความยาวมากกว่า 20 วินาทีขึ้นไป (เสียงบอร์ดไถจะสั้นมาก แค่ 2-5 วิแล้วลูป)
+                    if obj.IsPlaying and (obj.TimeLength > 20 or obj.TimeLength == 0) then
                         
                         local soundNameLower = string.lower(obj.Name)
+                        local rawId = obj.SoundId
                         
-                        if not NameBlacklist[soundNameLower] then
-                            -- ตัดเสียงเดินมาตรฐานออก
+                        -- เช็คว่า ID หรือชื่อ ไม่อยู่ในตารางเสียงขยะของระบบสเก็ตบอร์ด
+                        if not NameBlacklist[soundNameLower] and not AssetBlacklist[rawId] then
+                            
+                            -- ตัดเสียงขยับเขยื้อนพื้นฐานของ Roblox ออก
                             if obj.Name ~= "GettingUp" and obj.Name ~= "Died" and obj.Name ~= "FreeFalling" and obj.Name ~= "Jumping" and obj.Name ~= "Landing" and obj.Name ~= "Running" and obj.Name ~= "Splash" and obj.Name ~= "Swimming" and obj.Name ~= "Climbing" then
                                 
-                                -- ล้อม pcall ป้องกันกรณีออบเจกต์ถูกทำลายกระทันหันในแมพ ไม่ให้โค้ดค้าง
-                                local isVehicleSound = false
-                                pcall(function()
-                                    local currentParent = obj.Parent
-                                    for i = 1, 4 do
-                                        if currentParent and currentParent ~= game then
-                                            local parentName = string.lower(currentParent.Name)
-                                            if string.find(parentName, "wheel") or string.find(parentName, "skate") or string.find(parentName, "hover") or string.find(parentName, "vehicle") or string.find(parentName, "motor") or string.find(parentName, "car") then
-                                                isVehicleSound = true
-                                                break
-                                            end
-                                            currentParent = currentParent.Parent
-                                        else
-                                            break
-                                        end
-                                    end
-                                end)
-                                
-                                if not isVehicleSound then
-                                    return obj
-                                end
+                                -- ดึงค่าส่งคืนไปเลย ไม่ต้องสนว่า Parent จะเป็นสเก็ตบอร์ดหรือไม่! เพราะเราคัดกรองจากเนื้อเสียงเพลงจริงเรียบร้อยแล้ว
+                                return obj
                                 
                             end
                         end
