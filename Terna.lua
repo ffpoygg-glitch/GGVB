@@ -145,7 +145,6 @@ local JunkBlacklist = {
     ["122929786531506"] = true,
     ["90308298517537"] = true,
     ["00"] = true,
-
 }
 
 local function getCleanID(soundIdStr)
@@ -207,7 +206,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันหูได้ยินดึงขึ้นทันที) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันกรองเสียง Prop/SFX ออก) ] ====================
 
 local function checkPlayerCurrentSound(targetPlayer)
     if not targetPlayer then return nil end
@@ -224,8 +223,12 @@ local function checkPlayerCurrentSound(targetPlayer)
         if success and descendants then
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" then
-                    if obj.IsPlaying and (obj.TimeLength >= 1 or obj.TimeLength == 0) then
-                        return obj
+                    -- 🔥 เพิ่มตัวกรองคัดแยก: ต้องกำลังเล่นอยู่ AND (ต้องเปิดวนลูป OR ความยาวเพลงมากกว่า 10 วินาทีขึ้นไป หรือเป็นเพลงที่ยังโหลดความยาวไม่เสร็จแต่เล่นอยู่)
+                    if obj.IsPlaying and (obj.Looped or obj.TimeLength > 10 or obj.TimeLength == 0) then
+                        -- บายพาสไม่เอาเสียงเดินมาตรฐานของ Roblox
+                        if obj.Name ~= "GettingUp" and obj.Name ~= "Died" and obj.Name ~= "FreeFalling" and obj.Name ~= "Jumping" and obj.Name ~= "Landing" and obj.Name ~= "Running" and obj.Name ~= "Splash" and obj.Name ~= "Swimming" and obj.Name ~= "Climbing" then
+                            return obj
+                        end
                     end
                 end
             end
@@ -451,7 +454,6 @@ local function refreshPlayers()
                 PBtn.Text = "  🛡️ " .. p.DisplayName .. " (@" .. p.Name .. ") [ไวริส]"
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
             elseif hasMusic then
-                -- 🔥 แก้ไขให้แสดงทั้ง DisplayName และ @Name ควบคู่กันตอนเปิดเพลงเรียบร้อยมึง
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ") [กำลังเปิดเพลง 🎵]"
                 PBtn.TextColor3 = Color3.fromRGB(255, 120, 255)
             else
