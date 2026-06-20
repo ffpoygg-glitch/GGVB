@@ -145,6 +145,7 @@ local JunkBlacklist = {
     ["122929786531506"] = true,
     ["90308298517537"] = true,
     ["00"] = true,
+    ["83056197503510"] = true,
 }
 
 local function getCleanID(soundIdStr)
