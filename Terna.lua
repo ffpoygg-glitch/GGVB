@@ -206,7 +206,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันกรองเสียง Prop/SFX ออก) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันบล็อกเสียง Prop/สเก็ตบอร์ด/โฮเวอร์บอร์ด ใน Brookhaven) ] ====================
 
 local function checkPlayerCurrentSound(targetPlayer)
     if not targetPlayer then return nil end
@@ -218,17 +218,52 @@ local function checkPlayerCurrentSound(targetPlayer)
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
     
+    -- 🛑 รายชื่อชื่อ Sound ขยะประเภทยานพาหนะ/เอฟเฟกต์แรพที่ชอบหลุดรอดเข้ามา
+    local NameBlacklist = {
+        ["roll"] = true, ["clips"] = true, ["sound"] = true, ["engine"] = true, 
+        ["pitch"] = true, ["drive"] = true, ["skateboardsound"] = true, ["hoverdrive"] = true,
+        ["idle"] = true, ["move"] = true, ["spark"] = true, ["spin"] = true, ["thrust"] = true
+    }
+    
     for _, folder in ipairs(scanTargets) do
         local success, descendants = pcall(function() return folder:GetDescendants() end)
         if success and descendants then
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" then
-                    -- 🔥 เพิ่มตัวกรองคัดแยก: ต้องกำลังเล่นอยู่ AND (ต้องเปิดวนลูป OR ความยาวเพลงมากกว่า 10 วินาทีขึ้นไป หรือเป็นเพลงที่ยังโหลดความยาวไม่เสร็จแต่เล่นอยู่)
                     if obj.IsPlaying and (obj.Looped or obj.TimeLength > 10 or obj.TimeLength == 0) then
-                        -- บายพาสไม่เอาเสียงเดินมาตรฐานของ Roblox
-                        if obj.Name ~= "GettingUp" and obj.Name ~= "Died" and obj.Name ~= "FreeFalling" and obj.Name ~= "Jumping" and obj.Name ~= "Landing" and obj.Name ~= "Running" and obj.Name ~= "Splash" and obj.Name ~= "Swimming" and obj.Name ~= "Climbing" then
-                            return obj
+                        
+                        local soundNameLower = string.lower(obj.Name)
+                        
+                        -- 1️⃣ ตรวจสอบชื่อออบเจกต์: ถ้าตรงกับซาวด์เอฟเฟกต์ของรถ/สเก็ตบอร์ด ให้ข้ามทันที
+                        if not NameBlacklist[soundNameLower] then
+                            
+                            -- บายพาสไม่เอาเสียงเดินมาตรฐานของ Roblox
+                            if obj.Name ~= "GettingUp" and obj.Name ~= "Died" and obj.Name ~= "FreeFalling" and obj.Name ~= "Jumping" and obj.Name ~= "Landing" and obj.Name ~= "Running" and obj.Name ~= "Splash" and obj.Name ~= "Swimming" and obj.Name ~= "Climbing" then
+                                
+                                -- 2️⃣ ตรวจสอบตำแหน่งที่อยู่ (Parent Check): สแกนขึ้นไปหาคำว่า Wheel, Skateboard, Hover, Vehicle
+                                local isVehicleSound = false
+                                local currentParent = obj.Parent
+                                for i = 1, 4 do -- เช็คขึ้นไปไม่เกิน 4 ชั้นลำดับชั้นโมเดลเพื่อความเร็ว
+                                    if currentParent then
+                                        local parentName = string.lower(currentParent.Name)
+                                        if string.find(parentName, "wheel") or string.find(parentName, "skate") or string.find(parentName, "hover") or string.find(parentName, "vehicle") or string.find(parentName, "motor") or string.find(parentName, "car") then
+                                            isVehicleSound = true
+                                            break
+                                        end
+                                        currentParent = currentParent.Parent
+                                    else
+                                        break
+                                    end
+                                end
+                                
+                                -- ถ้าตรวจสอบแล้วไม่ใช่เสียงที่มาจากยานพาหนะหรือล้อ ค่อยส่งค่าคืนไป!
+                                if not isVehicleSound then
+                                    return obj
+                                end
+                                
+                            end
                         end
+                        
                     end
                 end
             end
@@ -253,7 +288,8 @@ local function directLogMusicID(playerName)
                 "**Spy Executor**\n`@%s`\n\n" ..
                 "**Target Player**\n`@%s`\n\n" ..
                 "**Audio Object Name**\n`%s`\n\n" ..
-                "**Audio ID**\n```\n%s\n```\n" ..
+                "**Audio ID**\n```\n%s\n
+```\n" ..
                 "**Links**\n[View on Roblox](https://www.roblox.com/library/%s)",
                 LocalPlayer.Name, targetPlayer.Name, soundObj.Name, cleanID, cleanID
             )
@@ -294,7 +330,7 @@ local function directLogRawJunk(playerName)
                 "**Junk Collector**\n`@%s`\n\n" ..
                 "**Target Block**\n`@%s`\n\n" ..
                 "**Attachment File Status**\n`ระบบได้ทำการสร้าง %s อัปโหลดแนบไว้ด้านล่างกล่องนี้เรียบร้อยแล้วมึง!`",
-                LocalPlayer.Name, targetPlayer.Name, txtFileName
+                LocalPlayer.Name, targetPlayer.Name, soundObj.Name, txtFileName
             )
             
             local embed = {
@@ -491,7 +527,7 @@ GetIDBtn.MouseButton1Click:Connect(function()
         if result then
             StatusLabel.Text = "💥 สำเร็จ! ยิงข้อมูลแบบเรียงดิ่งสุ่มสีเข้าดิสคอร์ดแล้ว"
         else
-            StatusLabel.Text = "ไม่พบเพลงจริง (หรือไอดีต่ำกว่า 7 หลัก/ติด Blacklist)"
+            StatusLabel.Text = "ไม่พบเพลงจริง (หรือไอดีต่ำกว่า 7 หลัก/ติด Blacklist/เสียงแมพ)"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
