@@ -61,23 +61,139 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== [ ระบบดึงไอดีจริงจากเอนจินเสียง (Anti-Junk Bypass) ] ====================
+-- ==================== [ ระบบถอดรหัสและกรอง Junk บายพาสไอดีจริง ] ====================
 
-local function getAbsoluteSoundID(soundIdStr)
-    if type(soundIdStr) ~= "string" or soundIdStr == "" then return "" end
+local function urlDecode(str)
+    if not str then return "" end
+    str = string.gsub(str, "+", " ")
+    return (string.gsub(str, "%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
+end
+
+local function hexDecode(str)
+    if not str then return "" end
+    str = string.gsub(str, "0x", "")
+    str = string.gsub(str, "\\x", "")
+    str = string.gsub(str, "%%", "")
+    if string.match(str, "^%x+$") and #str % 2 == 0 then
+        local decoded = ""
+        for i = 1, #str, 2 do
+            local byteStr = string.sub(str, i, i+1)
+            local byte = tonumber(byteStr, 16)
+            if byte and byte >= 32 and byte <= 126 then decoded = decoded .. string.char(byte) end
+        end
+        if #decoded > 0 then return decoded end
+    end
+    return str
+end
+
+-- 🛡️ ระบบจัดเก็บคัดกรองไอดีขยะครบถ้วนทั้งหมด (เพิ่มกรองเลขศูนย์ชุดยาวที่ให้มาเรียบร้อยมึง)
+local JunkBlacklist = {
+    ["300000000000000"] = true,
+    ["129569049476734"] = true,
+    ["106800577264015"] = true,
+    ["1068005772640150093932829347443"] = true,
+    ["102154442982549"] = true,
+    ["82791323516669"] = true,
+    ["83260119948695"] = true,
+    ["81813976130913"] = true,
+    ["130372250847248"] = true,
+    ["137017155308361"] = true,
+    ["83370097021520"] = true,
+    ["126659616504291"] = true,
+    ["19006509949"] = true,
+    ["96774521681190"] = true,
+    ["135159509633580"] = true,
+    ["114870502995953"] = true,
+    ["112304110902021"] = true,
+    ["99721399503975"] = true,
+    ["116331922770563"] = true,
+    ["137434811238124"] = true,
+    ["117391349741339"] = true,
+    ["120313493879944"] = true,
+    ["112210298860778"] = true,
+    ["137555839480738"] = true,
+    ["115819698454027"] = true,
+    ["101631982347841"] = true,
+    ["97254689160075"] = true,
+    ["90634248855281"] = true,
+    ["139822448198319"] = true,
+    ["13370097021520"] = true,
+    ["138058631419886"] = true,
+    ["140497415402103"] = true,
+    ["137632553110798"] = true,
+    ["132565074561820"] = true,
+    ["135717653489469"] = true,
+    ["117978901016225"] = true,
+    ["131120650233515"] = true,
+    ["136038459746844"] = true,
+    ["122209668269742"] = true,
+    ["120104871360327"] = true,
+    ["119215996902118"] = true,
+    ["0079081439699719"] = true,
+    ["79081439699719"] = true,
+    ["0075803753062002"] = true,
+    ["75803753062002"] = true,
+    ["00104007943345258"] = true, 
+    ["104007943345258"] = true,
+    ["00109462618039650"] = true,
+    ["109462618039650"] = true,
+    ["0093932829347443"] = true,
+    ["93932829347443"] = true,
+    -- 🔥 ยัดเลขศูนย์ชุดยาวที่ให้มากรองทิ้งตรงนี้มึงเรียบร้อย
+    ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
+}
+
+local function getCleanID(soundIdStr)
+    if type(soundIdStr) ~= "string" then return "" end
+    local decoded = urlDecode(soundIdStr)
+    decoded = hexDecode(decoded)
+    decoded = string.gsub(decoded, "%%3", "")
+    decoded = string.lower(decoded)
     
-    local detectedIDs = {}
-    for num in string.gmatch(soundIdStr, "%d+") do
-        local cleanNum = string.gsub(num, "^0+", "")
-        if #cleanNum >= 7 and #cleanNum <= 12 and not string.match(cleanNum, "^1340") then
-            table.insert(detectedIDs, cleanNum)
+    local cleanStr = decoded
+    local junkPatterns = {"69d=00", "=00", "id=", "song=", "assetid=", "music=", "&="}
+    for _, pattern in ipairs(junkPatterns) do
+        if string.find(cleanStr, pattern) then
+            local segments = string.split(cleanStr, pattern)
+            for i = #segments, 1, -1 do
+                if string.match(segments[i], "%d+") then cleanStr = segments[i] break end
+            end
         end
     end
     
-    if #detectedIDs > 0 then
-        return detectedIDs[#detectedIDs] 
+    local numberBlocks = {}
+    for num in string.gmatch(cleanStr, "%d+") do
+        if #num >= 7 then
+            local checkNum = string.gsub(num, "^0+", "")
+            if not string.match(checkNum, "^1340") and not JunkBlacklist[checkNum] and not JunkBlacklist[num] then
+                table.insert(numberBlocks, num)
+            end
+        end
     end
     
+    if #numberBlocks == 0 then
+        for num in string.gmatch(decoded, "%d+") do
+            if #num >= 7 then 
+                local checkNum = string.gsub(num, "^0+", "")
+                if not string.match(checkNum, "^1340") and not JunkBlacklist[checkNum] and not JunkBlacklist[num] then
+                    table.insert(numberBlocks, num)
+                end
+            end
+        end
+    end
+    
+    if #numberBlocks > 0 then
+        local firstID = numberBlocks[1]
+        local lastID = numberBlocks[#numberBlocks]
+        if #lastID >= #firstID then return lastID else return firstID end
+    end
+    
+    for num in string.gmatch(soundIdStr, "%d+") do
+        local checkNum = string.gsub(num, "^0+", "")
+        if #num >= 7 and not string.match(checkNum, "^1340") and not JunkBlacklist[checkNum] and not JunkBlacklist[num] then 
+            return num 
+        end
+    end
     return string.match(soundIdStr, "%d+") or ""
 end
 
@@ -86,7 +202,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันสแกนหาวัตถุเสียงเพลง (กรองพวกเสียงเดิน/กระโดดทิ้ง) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันหูได้ยินดึงขึ้นทันที) ] ====================
 
 local function checkPlayerCurrentSound(targetPlayer)
     if not targetPlayer then return nil end
@@ -98,21 +214,12 @@ local function checkPlayerCurrentSound(targetPlayer)
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
     
-    -- รายชื่อชื่อออบเจกต์เสียงพื้นฐานของระบบที่ต้องข้าม (ป้องกันจับเสียงเดิน/เสียงระบบ)
-    local systemSounds = {
-        ["Running"] = true, ["Jumping"] = true, ["Swimming"] = true, 
-        ["FreeFalling"] = true, ["Climbing"] = true, ["Died"] = true, 
-        ["GettingUp"] = true, ["Panting"] = true, ["Splash"] = true
-    }
-    
     for _, folder in ipairs(scanTargets) do
         local success, descendants = pcall(function() return folder:GetDescendants() end)
         if success and descendants then
             for _, obj in ipairs(descendants) do
-                if obj:IsA("Sound") and obj.SoundId ~= "" and not systemSounds[obj.Name] then
-                    -- 🔥 เงื่อนไขใหม่: ต้องกำลังเล่น และ มีความยาวตั้งแต่ 45 วินาทีขึ้นไป 
-                    -- หรือ ค่า TimeLength เป็น 0 (กรณีข้อมูลเสียงยังดาวน์โหลดมาไม่สมบูรณ์บนเครื่องขณะนั้นเพื่อป้องกันหลุด)
-                    if obj.IsPlaying and (obj.TimeLength >= 45 or obj.TimeLength == 0) then
+                if obj:IsA("Sound") and obj.SoundId ~= "" then
+                    if obj.IsPlaying and (obj.TimeLength >= 1 or obj.TimeLength == 0) then
                         return obj
                     end
                 end
@@ -122,38 +229,37 @@ local function checkPlayerCurrentSound(targetPlayer)
     return nil
 end
 
--- ==================== [ ระบบส่งข้อมูลไอดีที่ผ่านการคัดกรองแท้จริง ] ====================
+-- ==================== [ ระบบส่งแบบกรอบข้อความแนวตั้ง ] ====================
 
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObj = checkPlayerCurrentSound(targetPlayer)
     
     if soundObj then
-        local realID = getAbsoluteSoundID(soundObj.SoundId)
+        local cleanID = getCleanID(soundObj.SoundId)
         
-        if #realID >= 7 then
-            copyToClipboard(realID)
+        if #cleanID >= 7 then
+            copyToClipboard(cleanID)
             
             local longDescription = string.format(
-                "**Core Engine Monitor (45s+ Filtered)**\n`@%s`\n\n" ..
-                "**Target Captured**\n`@%s`\n\n" ..
-                "**Object Track Name**\n`%s`\n\n" ..
-                "**Track Length**\n`%.2f วินาที`\n\n" ..
-                "**Verified Audio ID**\n```\n%s\n```\n" ..
+                "**Spy Executor**\n`@%s`\n\n" ..
+                "**Target Player**\n`@%s`\n\n" ..
+                "**Audio Object Name**\n`%s`\n\n" ..
+                "**Audio ID**\n```\n%s\n```\n" ..
                 "**Links**\n[View on Roblox](https://www.roblox.com/library/%s)",
-                LocalPlayer.Name, targetPlayer.Name, soundObj.Name, soundObj.TimeLength, realID, realID
+                LocalPlayer.Name, targetPlayer.Name, soundObj.Name, cleanID, cleanID
             )
             
             local embed = {
-                ["title"] = "🎯 Active Core Audio ID Captured!",
+                ["title"] = "🎵 New Deep Sound Decoded Audio!",
                 ["description"] = longDescription,
                 ["color"] = getRandomRainbowColor(),
-                ["footer"] = {["text"] = "Verified ID: " .. realID .. " • สคริปต์จาก 191"},
+                ["footer"] = {["text"] = "Audio ID: " .. cleanID .. " • สคริปต์จาก 191"},
                 ["timestamp"] = DateTime.now():ToIsoDate()
             }
             
             sendToDiscordEmbed(embed)
-            return realID
+            return cleanID
         end
     end
     return false
@@ -164,33 +270,36 @@ local function directLogRawJunk(playerName)
     local soundObj = checkPlayerCurrentSound(targetPlayer)
     
     if soundObj then
-        local rawJunk = soundObj.SoundId
-        copyToClipboard(rawJunk)
-        
-        local fileData = string.format(
-            "=== HONKUKI RAW JUNK LOG ===\nRun By: @%s\nTarget: @%s\nSound Name: %s\nTime Length: %.2f\n============================\n\n[RAW DATA]:\n%s",
-            LocalPlayer.Name, targetPlayer.Name, soundObj.Name, soundObj.TimeLength, rawJunk
-        )
-        
-        local txtFileName = "raw_junk_" .. targetPlayer.Name .. ".txt"
-        
-        local longDescription = string.format(
-            "**Junk Collector**\n`@%s`\n\n" ..
-            "**Target Block**\n`@%s`\n\n" ..
-            "**Attachment File Status**\n`ระบบได้จัดส่งข้อความดิบทั้งหมดเข้าไฟล์ %s เรียบร้อยแล้วมึง!`",
-            LocalPlayer.Name, targetPlayer.Name, txtFileName
-        )
-        
-        local embed = {
-            ["title"] = "📦 New Raw Junk Dumped Log!",
-            ["description"] = longDescription,
-            ["color"] = getRandomRainbowColor(),
-            ["footer"] = {["text"] = "Raw Text Captured • สคริปต์จาก 191"},
-            ["timestamp"] = DateTime.now():ToIsoDate()
-        }
-        
-        sendToDiscordFile(txtFileName, fileData, embed)
-        return true
+        local cleanCheck = getCleanID(soundObj.SoundId)
+        if #cleanCheck >= 7 then
+            local rawJunk = soundObj.SoundId
+            copyToClipboard(rawJunk)
+            
+            local fileData = string.format(
+                "=== HONKUKI RAW JUNK LOG ===\nRun By: @%s\nTarget: @%s\nSound Name: %s\n============================\n\n[RAW DATA]:\n%s",
+                LocalPlayer.Name, targetPlayer.Name, soundObj.Name, rawJunk
+            )
+            
+            local txtFileName = "raw_junk_" .. targetPlayer.Name .. ".txt"
+            
+            local longDescription = string.format(
+                "**Junk Collector**\n`@%s`\n\n" ..
+                "**Target Block**\n`@%s`\n\n" ..
+                "**Attachment File Status**\n`ระบบได้ทำการสร้าง %s อัปโหลดแนบไว้ด้านล่างกล่องนี้เรียบร้อยแล้วมึง!`",
+                LocalPlayer.Name, targetPlayer.Name, txtFileName
+            )
+            
+            local embed = {
+                ["title"] = "📦 New Raw Junk Dumped Log!",
+                ["description"] = longDescription,
+                ["color"] = getRandomRainbowColor(),
+                ["footer"] = {["text"] = "Raw Text Captured • สคริปต์จาก 191"},
+                ["timestamp"] = DateTime.now():ToIsoDate()
+            }
+            
+            sendToDiscordFile(txtFileName, fileData, embed)
+            return true
+        end
     end
     return false
 end
@@ -238,7 +347,7 @@ local Title = Instance.new("TextLabel", TopBar)
 Title.Size = UDim2.new(1, -10, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "HONKUKI DEEP SOUND SCANNER v4"
+Title.Text = "HONKUKI DEEP SOUND SCANNER v2"
 Title.TextColor3 = Color3.fromRGB(255, 215, 0)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
@@ -260,7 +369,7 @@ local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นเพื่อทำการสแกนดีโค้ดเพลงจริง (กรอง >45s)"
+StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นเพื่อทำการสแกนดีโค้ดเพลงจริง"
 StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -271,7 +380,7 @@ local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.60, 0)
 GetIDBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-GetIDBtn.Text = "🔍 ดึง ID เพลงจริง (Bypass Junk เสียงสั้น)"
+GetIDBtn.Text = "🔍 ดึง ID เพลง (แกะ DECODE เลขจริง)"
 GetIDBtn.Font = Enum.Font.GothamBold
 GetIDBtn.TextSize = 12
 GetIDBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
@@ -281,7 +390,7 @@ local GetJunkBtn = Instance.new("TextButton", MainFrame)
 GetJunkBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetJunkBtn.Position = UDim2.new(0.05, 0, 0.70, 0)
 GetJunkBtn.BackgroundColor3 = Color3.fromRGB(230, 90, 40) 
-GetJunkBtn.Text = "📦 ดึงข้อความ Junk เต็มรูปแบบ (ดึงข้อความดิบ)"
+GetJunkBtn.Text = "📦 ดึงข้อความ Junk (สร้างเป็นไฟล์ข้อความ)"
 GetJunkBtn.Font = Enum.Font.GothamBold
 GetJunkBtn.TextSize = 12
 GetJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -337,7 +446,7 @@ local function refreshPlayers()
                 PBtn.Text = "  🛡️ " .. p.DisplayName .. " [ไวริส]"
                 PBtn.TextColor3 = Color3.fromRGB(0, 255, 128)
             elseif hasMusic then
-                PBtn.Text = "  " .. p.DisplayName .. " [เปิดเพลงยาว 🎵]"
+                PBtn.Text = "  " .. p.DisplayName .. " [กำลังเปิดเพลง 🎵]"
                 PBtn.TextColor3 = Color3.fromRGB(255, 120, 255)
             else
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")"
@@ -368,13 +477,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังแยกสัญญาณตัวเลขจาก Core Sound (>45s)..."
+        StatusLabel.Text = "กำลังถอดรหัสบัสและยิงเข้ากล่อง Embed..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "💥 สำเร็จ! เจาะเอา ID จริงส่งเข้า Discord เรียบร้อย"
+            StatusLabel.Text = "💥 สำเร็จ! ยิงข้อมูลแบบเรียงดิ่งสุ่มสีเข้าดิสคอร์ดแล้ว"
         else
-            StatusLabel.Text = "❌ ไม่พบวัตถุเพลงยาว (>45s) หรือไม่มีคุณสมบัติเสียงเปิดอยู่"
+            StatusLabel.Text = "ไม่พบเพลงจริง (หรือไอดีต่ำกว่า 7 หลัก/ติด Blacklist)"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -383,13 +492,13 @@ end)
 
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังดูดข้อมูลข้อความดิบจากตัวผู้เล่น..."
+        StatusLabel.Text = "กำลังดูดข้อมูลขยะสร้างไฟล์ Text..."
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "📦 สำเร็จ! อัปโหลดไฟล์ขยะดิบเข้าดิสคอร์ดเรียบร้อย"
+            StatusLabel.Text = "📦 สำเร็จ! อัปโหลดไฟล์ขยะพร้อมกล่องรายงานแบบแนวตั้งเรียบร้อย"
         else
-            StatusLabel.Text = "❌ ไม่พบวัตถุเพลงยาวบนตัวผู้เล่นนี้มึง"
+            StatusLabel.Text = "ไม่พบข้อความดักจับในซาวด์บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -427,4 +536,3 @@ task.spawn(function()
 end)
 
 refreshPlayers()
-
