@@ -206,7 +206,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันบล็อกเสียง Prop/สเก็ตบอร์ด/โฮเวอร์บอร์ด ใน Brookhaven) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงจริง (เวอร์ชันแก้โค้ดค้าง + บล็อกเสียงพร้อพชัวร์ๆ) ] ====================
 
 local function checkPlayerCurrentSound(targetPlayer)
     if not targetPlayer then return nil end
@@ -218,9 +218,9 @@ local function checkPlayerCurrentSound(targetPlayer)
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
     
-    -- 🛑 รายชื่อชื่อ Sound ขยะประเภทยานพาหนะ/เอฟเฟกต์แรพที่ชอบหลุดรอดเข้ามา
+    -- บัญชีดำชื่อเสียงขยะจากพวกบอร์ดและรถ (เอาคำว่า sound ออกเพราะไปทับชื่อวิทยุบางตัว)
     local NameBlacklist = {
-        ["roll"] = true, ["clips"] = true, ["sound"] = true, ["engine"] = true, 
+        ["roll"] = true, ["clips"] = true, ["engine"] = true, 
         ["pitch"] = true, ["drive"] = true, ["skateboardsound"] = true, ["hoverdrive"] = true,
         ["idle"] = true, ["move"] = true, ["spark"] = true, ["spin"] = true, ["thrust"] = true
     }
@@ -234,29 +234,28 @@ local function checkPlayerCurrentSound(targetPlayer)
                         
                         local soundNameLower = string.lower(obj.Name)
                         
-                        -- 1️⃣ ตรวจสอบชื่อออบเจกต์: ถ้าตรงกับซาวด์เอฟเฟกต์ของรถ/สเก็ตบอร์ด ให้ข้ามทันที
                         if not NameBlacklist[soundNameLower] then
-                            
-                            -- บายพาสไม่เอาเสียงเดินมาตรฐานของ Roblox
+                            -- ตัดเสียงเดินมาตรฐานออก
                             if obj.Name ~= "GettingUp" and obj.Name ~= "Died" and obj.Name ~= "FreeFalling" and obj.Name ~= "Jumping" and obj.Name ~= "Landing" and obj.Name ~= "Running" and obj.Name ~= "Splash" and obj.Name ~= "Swimming" and obj.Name ~= "Climbing" then
                                 
-                                -- 2️⃣ ตรวจสอบตำแหน่งที่อยู่ (Parent Check): สแกนขึ้นไปหาคำว่า Wheel, Skateboard, Hover, Vehicle
+                                -- ล้อม pcall ป้องกันกรณีออบเจกต์ถูกทำลายกระทันหันในแมพ ไม่ให้โค้ดค้าง
                                 local isVehicleSound = false
-                                local currentParent = obj.Parent
-                                for i = 1, 4 do -- เช็คขึ้นไปไม่เกิน 4 ชั้นลำดับชั้นโมเดลเพื่อความเร็ว
-                                    if currentParent then
-                                        local parentName = string.lower(currentParent.Name)
-                                        if string.find(parentName, "wheel") or string.find(parentName, "skate") or string.find(parentName, "hover") or string.find(parentName, "vehicle") or string.find(parentName, "motor") or string.find(parentName, "car") then
-                                            isVehicleSound = true
+                                pcall(function()
+                                    local currentParent = obj.Parent
+                                    for i = 1, 4 do
+                                        if currentParent and currentParent ~= game then
+                                            local parentName = string.lower(currentParent.Name)
+                                            if string.find(parentName, "wheel") or string.find(parentName, "skate") or string.find(parentName, "hover") or string.find(parentName, "vehicle") or string.find(parentName, "motor") or string.find(parentName, "car") then
+                                                isVehicleSound = true
+                                                break
+                                            end
+                                            currentParent = currentParent.Parent
+                                        else
                                             break
                                         end
-                                        currentParent = currentParent.Parent
-                                    else
-                                        break
                                     end
-                                end
+                                end)
                                 
-                                -- ถ้าตรวจสอบแล้วไม่ใช่เสียงที่มาจากยานพาหนะหรือล้อ ค่อยส่งค่าคืนไป!
                                 if not isVehicleSound then
                                     return obj
                                 end
@@ -288,8 +287,7 @@ local function directLogMusicID(playerName)
                 "**Spy Executor**\n`@%s`\n\n" ..
                 "**Target Player**\n`@%s`\n\n" ..
                 "**Audio Object Name**\n`%s`\n\n" ..
-                "**Audio ID**\n```\n%s\n
-```\n" ..
+                "**Audio ID**\n```\n%s\n```\n" ..
                 "**Links**\n[View on Roblox](https://www.roblox.com/library/%s)",
                 LocalPlayer.Name, targetPlayer.Name, soundObj.Name, cleanID, cleanID
             )
