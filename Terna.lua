@@ -95,7 +95,7 @@ local function hexDecode(str)
     return str
 end
 
--- 🛡️ แกะเฉพาะไอดีจริงของผู้เล่นคนนั้น + ข้ามเลขหลอกตายตัวตามเงื่อนไขมึง
+-- 🛡️ เจาะดึงเลข ID ตามจริงจากข้อความผู้เล่น + สั่งข้ามเลขขยะระเบิดระบบ 2 ตัว
 local function getAllIDsFromSound(soundIdStr)
     if type(soundIdStr) ~= "string" then return {} end
     local decoded = urlDecode(soundIdStr)
@@ -106,7 +106,7 @@ local function getAllIDsFromSound(soundIdStr)
     local foundIDs = {}
     local duplicates = {}
     
-    -- 🛑 รายการเลขหลอกตายตัวที่สั่งให้ข้ามเด็ดขาด
+    -- 🛑 รายการเลขขยะหลอกตาที่สั่งให้ข้ามเด็ดขาดไม่ดึงมา
     local IDBlacklist = {
         ["300000000000000"] = true,
         ["82791323516669"] = true
@@ -133,29 +133,6 @@ local function getAllIDsFromSound(soundIdStr)
     end
     
     return foundIDs
-end
-
--- 🌐 ฟังก์ชันดึงความยาววินาทีของ ID นั้น ๆ จากระบบ Marketplace ของ Roblox โดยตรง
-local function getRobloxAudioDuration(assetId)
-    local httpRequest = getHttpRequest()
-    if not httpRequest then return 0 end
-    
-    local success, response = pcall(function()
-        return httpRequest({
-            Url = "https://economy.roblox.com/v2/assets/" .. tostring(assetId) .. "/details",
-            Method = "GET"
-        })
-    end)
-    
-    if success and response and response.StatusCode == 200 then
-        local dataSuccess, decodedData = pcall(function() return HttpService:JSONEncode(response.Body) end)
-        -- พยายามดึงค่า Duration จาก JSON รายละเอียดไอเทม
-        local duration = string.match(response.Body, '"Duration":%s*(%d+%.?%d*)')
-        if duration then
-            return tonumber(duration) or 0
-        end
-    end
-    return 0
 end
 
 local function copyToClipboard(text)
@@ -199,7 +176,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ==================== [ ระบบคัดกรองตามจำนวนจริงของผู้เล่นคนนั้น ] ====================
+-- ==================== [ ระบบเจาะเพลงแล้วดึงส่งตรงเข้า Webhook ทันที ] ====================
 
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
@@ -207,75 +184,48 @@ local function directLogMusicID(playerName)
     
     if #soundObjects == 0 then return false end
     
-    local truePremiumID = nil
-    local longestDuration = 0
     local allExtractedIDs = {}
     local audioObjectName = "Unknown"
-    local idDetailsList = {} -- เก็บข้อมูลความยาวจริงของแต่ละ ID ที่ดึงมาได้
     
     for _, soundObj in ipairs(soundObjects) do
         audioObjectName = soundObj.Name
         local ids = getAllIDsFromSound(soundObj.SoundId)
-        
         for _, id in ipairs(ids) do
             table.insert(allExtractedIDs, id)
-            
-            -- ดึงความยาวจริงของ ID เพลงนี้จากระบบ Roblox
-            local audioDuration = getRobloxAudioDuration(id)
-            idDetailsList[id] = audioDuration
-            
-            -- คัดหาเพลงที่ยาวที่สุดและต้องเกิน 60 วินาที (1 นาที) เพื่อเป็น ID จริง
-            if audioDuration >= 60 and audioDuration > longestDuration then
-                longestDuration = audioDuration
-                truePremiumID = id
-            end
         end
     end
     
     if #allExtractedIDs == 0 then return false end
     
-    -- วนลูปสร้างรายการคัดแยกตามไอดีที่ผู้เล่นใช้จริง 
-    local junkIdsListStr = ""
+    -- ก๊อปปี้ตัวแรกเข้า Clipboard เผื่อไว้ด่วน
+    copyToClipboard(allExtractedIDs[1])
+    
+    -- วนลูปสร้างข้อความไอดีตามจำนวนจริงที่แกะมาได้ ส่งไปให้หลังบ้านมึงเช็คความยาววิเอาเอง
+    local idListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
-        local duration = idDetailsList[id] or 0
-        if id == truePremiumID then
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] 👑 (Premium True Music - ยาว %.1f วินาที)\n", idx, id, duration)
-        else
-            -- ถ้าเพลงยาวไม่ถึง 60 วินาที จะถูกตีตราว่าเป็นไอดีหลอกตามจริงทันที!
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] ❌ (ไอดีหลอกสั้น / ยาวแค่ %.1f วินาที)\n", idx, id, duration)
-        end
+        idListStr = idListStr .. string.format("%02d. [ID: %s] -> (ส่งต่อให้ระบบหลังบ้านมึงตรวจสอบความยาว)\n", idx, id)
     end
-    
-    if truePremiumID then
-        copyToClipboard(truePremiumID)
-    end
-    
-    local premiumDisplay = truePremiumID and string.format("`%s` *(ความยาวจากระบบ %.1f วินาที)*", truePremiumID, longestDuration) or "`❌ ไม่พบ ID ที่มีความยาวเพลงเกิน 1 นาทีใน String ของผู้เล่นนี้เลย`"
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
-        "**👑 PREMIUM TRUE MUSIC ID (เช็คความยาวไฟล์จริงเกิน 1 นาที)**\n%s\n\n" ..
-        "**📦 REAL EXTRACTED BLOCKS (คัดกรองไอดีหลอกรายตัวตามที่ผู้เล่นใช้จริงจำนวน %d ตัว)**\n```\n%s```\n",
-        LocalPlayer.Name, targetPlayer.Name, audioObjectName,
-        premiumDisplay, #allExtractedIDs, junkIdsListStr
+        "**📦 EXTRACTED REAL IDs (แกะสดตามจริงจำนวน %d ตัว)**\n" ..
+        "```\n%s```\n" ..
+        "*หมายเหตุ: ระบบหน้าบ้านทำการดึงและส่งต่อข้อมูลดิบเรียบร้อย ให้สคริปต์หลังบ้านมึงคัดเกณฑ์ 60 วิ+ เอาเองเลย!*",
+        LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, idListStr
     )
     
-    if truePremiumID then
-        longDescription = longDescription .. "**Quick Link:** [Click to View on Roblox](https://www.roblox.com/library/"..truePremiumID..")"
-    end
-    
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Validator (Roblox API Filter Patch)",
+        ["title"] = "🛡️ Hard-Gate Audio Extractor (Direct Pass-Through Mode)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Strict Verification Mode • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Raw Pass Data • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
     sendToDiscordEmbed(embed)
-    return truePremiumID or "Junk Only"
+    return true
 end
 
 local function directLogRawJunk(playerName)
@@ -378,7 +328,7 @@ local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StatusLabel.Text = "ระบบดักกรองความยาวไอดีรายตัวผ่าน Roblox API เปิดแล้ว"
+StatusLabel.Text = "โหมดดึงไอดีสดส่งตรงเข้า Webhook ไม่เช็คเวลาหน้าบ้านเปิดทำงาน"
 StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -389,7 +339,7 @@ local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.60, 0)
 GetIDBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-GetIDBtn.Text = "ดึง ID และแยกแผงจริง (Roblox API Check)"
+GetIDBtn.Text = "เจาะและดึงไอดีตามจริงทั้งหมด (Direct Log)"
 GetIDBtn.Font = Enum.Font.GothamBold
 GetIDBtn.TextSize = 12
 GetIDBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
@@ -486,13 +436,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังสแกนถอดรหัสความยาวไอดีจากระบบ Roblox..."
+        StatusLabel.Text = "กำลังเจาะดึงเลขไอดีและส่งเข้า Webhook ทันที..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
-        if result and result ~= "Junk Only" then
-            StatusLabel.Text = "สำเร็จ! แยกไอดีเพลงจริงและไอดีหลอกสั้นลงดิสแล้ว"
+        if result then
+            StatusLabel.Text = "สำเร็จ! ส่งไอดีทั้งหมดขึ้นดิสให้หลังบ้านมึงกรองแล้ว"
         else
-            StatusLabel.Text = "ไม่พบ ID เพลงยาวเกิน 1 นาทีในระบบเลย"
+            StatusLabel.Text = "ไม่พบ ID ใดๆ ใน String บนตัวผู้เล่นคนนี้"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
