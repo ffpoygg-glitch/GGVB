@@ -13,6 +13,15 @@ local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ
 -- ตารางจัดเก็บรายชื่อ Whitelist (ไวริส)
 local WhitelistPlayers = {}
 
+-- ==================== [ ฟังก์ชันหาฟังก์ชัน Request ที่ปลอดภัยที่สุด ] ====================
+local function getHttpRequest()
+    if request then return request end
+    if http_request then return http_request end
+    if syn and type(syn) == "table" and syn.request then return syn.request end
+    if http and type(http) == "table" and http.request then return http.request end
+    return nil
+end
+
 -- ==================== [ ฟังก์ชันสุ่มแถบสีรุ้งข้างกรอบ Embed ] ====================
 local function getRandomRainbowColor()
     local colors = {16711680, 16744192, 16776960, 65280, 65535, 255, 16711935}
@@ -21,7 +30,7 @@ end
 
 -- ==================== [ ฟังก์ชันส่งข้อมูลเข้า Discord Webhook ] ====================
 local function sendToDiscordEmbed(embedData)
-    local httpRequest = (syn and syn.request) or http_request or (http and http.request) or request
+    local httpRequest = getHttpRequest()
     if httpRequest then
         pcall(function()
             httpRequest({
@@ -35,7 +44,7 @@ local function sendToDiscordEmbed(embedData)
 end
 
 local function sendToDiscordFile(fileName, fileContent, embedData)
-    local httpRequest = (syn and syn.request) or http_request or (http and http.request) or request
+    local httpRequest = getHttpRequest()
     if httpRequest then
         pcall(function()
             local boundary = "----WebKitFormBoundaryHonkukiSpy"
@@ -61,7 +70,7 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== [ ระบบถอดรหัสและกรอง Junk บายพาสไอดีจริง ] ====================
+-- ==================== [ ระบบถอดรหัสและดึง ID เฉพาะที่ผู้เล่นใช้จริง ] ====================
 
 local function urlDecode(str)
     if not str then return "" end
@@ -86,7 +95,7 @@ local function hexDecode(str)
     return str
 end
 
--- 🛡️ ระบบดึงลิสต์ ID ทั้งหมดจากกองขยะหนาแน่น
+-- 🛡️ แกะเฉพาะไอดีที่อยู่ในซาวด์ของเป้าหมายจริง ๆ (ไม่มีการสุ่มเลขขยะเพิ่มมั่วซั่ว)
 local function getAllIDsFromSound(soundIdStr)
     if type(soundIdStr) ~= "string" then return {} end
     local decoded = urlDecode(soundIdStr)
@@ -97,6 +106,7 @@ local function getAllIDsFromSound(soundIdStr)
     local foundIDs = {}
     local duplicates = {}
     
+    -- ค้นหาตัวเลขที่มีความยาวตั้งแต่ 7 หลักขึ้นไปจากข้อความที่แกะแล้วจริง ๆ
     for num in string.gmatch(decoded, "%d+") do
         if #num >= 7 and not duplicates[num] then
             local checkNum = string.gsub(num, "^0+", "")
@@ -163,7 +173,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ==================== [ ระบบคัดกรองแบบ Hard-Gate Filter เกณฑ์ 60 วิ+ เท่านั้น ] ====================
+-- ==================== [ ระบบคัดกรองตามจำนวนจริงของผู้เล่นคนนั้น ] ====================
 
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
@@ -172,23 +182,26 @@ local function directLogMusicID(playerName)
     if #soundObjects == 0 then return false end
     
     local truePremiumID = nil
-    local maxDuration = 60
+    local maxDuration = 60 -- เกณฑ์ขั้นต่ำ 1 นาที (60 วินาที)
     local allExtractedIDs = {}
     local audioObjectName = "Unknown"
+    local actualTimeLength = 0
     
     for _, soundObj in ipairs(soundObjects) do
         audioObjectName = soundObj.Name
         
         if soundObj.TimeLength == 0 then task.wait(0.1) end
+        actualTimeLength = soundObj.TimeLength
         
-        local currentLength = soundObj.TimeLength
+        -- ดึงเฉพาะลิสต์ไอดีที่แกะได้จาก Property ของผู้เล่นคนนี้จริง ๆ
         local ids = getAllIDsFromSound(soundObj.SoundId)
         
         for _, id in ipairs(ids) do
             table.insert(allExtractedIDs, id)
             
-            if currentLength >= maxDuration then
-                maxDuration = currentLength
+            -- ถ้าความยาวซาวด์บัสปัจจุบันผ่านเกณฑ์ 1 นาทีขึ้นไป ให้ล็อกตัวนี้เป็น ID พรีเมียมจริง
+            if actualTimeLength >= maxDuration then
+                maxDuration = actualTimeLength
                 truePremiumID = id
             end
         end
@@ -196,12 +209,14 @@ local function directLogMusicID(playerName)
     
     if #allExtractedIDs == 0 then return false end
     
+    -- วนลูปสร้างรายการ "ตามจำนวนจริงที่แกะออกมาได้จากตัวผู้เล่น" เท่านั้น
     local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
         if id == truePremiumID then
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] (Premium True Music - %d Sec)\n", idx, id, maxDuration)
+            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] 👑 (Premium True Music - %d วินาที)\n", idx, id, actualTimeLength)
         else
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] (Fake/Junk ID)\n", idx, id)
+            -- หากความยาวซาวด์ไม่ถึง 1 นาที หรือไม่ใช่ไอดีที่เล่นอยู่จริง จะถูกตีสถานะเป็นไอดีหลอกตามจริงทันที
+            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] ❌ (ไอดีหลอก / ไม่ถึง 1 นาที)\n", idx, id)
         end
     end
     
@@ -209,15 +224,14 @@ local function directLogMusicID(playerName)
         copyToClipboard(truePremiumID)
     end
     
-    local premiumDisplay = truePremiumID and string.format("`%s` *(ความยาว %d วินาที)*", truePremiumID, maxDuration) or "`ไม่พบเพลงที่มีความยาวเกิน 1 นาที`"
+    local premiumDisplay = truePremiumID and string.format("`%s` *(ความยาว %d วินาที)*", truePremiumID, actualTimeLength) or "`❌ ไม่พบเพลงยาวเกิน 1 นาทีบนตัวผู้เล่นคนนี้`"
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
-        "**PREMIUM TRUE MUSIC ID**\n%s\n\n" ..
-        "**ALL EXTRACTED AUDIO BLOCKS (%d IDs)**\n```\n%s
-```\n",
+        "**👑 PREMIUM TRUE MUSIC ID (เกณฑ์ 1 นาที+)**\n%s\n\n" ..
+        "**📦 REAL EXTRACTED BLOCKS (คัดแยกตามที่ผู้เล่นใช้จริงจำนวน %d ตัว)**\n```\n%s```\n",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName,
         premiumDisplay, #allExtractedIDs, junkIdsListStr
     )
@@ -227,7 +241,7 @@ local function directLogMusicID(playerName)
     end
     
     local embed = {
-        ["title"] = "Hard-Gate Audio Validator (1 Min+ Only)",
+        ["title"] = "🛡️ Hard-Gate Audio Validator (Real Dynamic Filter)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
         ["footer"] = {["text"] = "Strict Verification Mode • สคริปต์จาก 191"},
@@ -338,7 +352,7 @@ local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StatusLabel.Text = "ระบบดักกรองไอดีหลอกสั้นต่ำกว่า 1 นาทีถาวรเปิดใช้งานแล้ว"
+StatusLabel.Text = "ระบบดักกรองไอดีหลอกตามจำนวนจริงที่ผู้เล่นใช้เปิดทำงานแล้ว"
 StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -446,13 +460,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังสแกนแบบบังคับเกณฑ์ 1 นาที+ คัดออกไอดีหลอก..."
+        StatusLabel.Text = "กำลังสแกนถอดรหัสไอดีจริงจากตัวผู้เล่น..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result and result ~= "Junk Only" then
-            StatusLabel.Text = "สำเร็จ! คัดไอดีจริงที่ยาวเกิน 1 นาทีลงดิสเรียบร้อย"
+            StatusLabel.Text = "สำเร็จ! ดึงไอดีและคัดแยกตามสถิติจริงลงดิสแล้ว"
         else
-            StatusLabel.Text = "ไม่พบไอดีจริงที่ยาวเกิน 1 นาทีบนตัวคนนี้เลย"
+            StatusLabel.Text = "ไม่พบเพลงผ่านเกณฑ์ 1 นาทีบนตัวผู้เล่นคนนี้"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -465,7 +479,7 @@ GetJunkBtn.MouseButton1Click:Connect(function()
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "สำเร็จ! อัปโหลดไฟล์ขยะพร้อมกล่องรายงานเรียบร้อย"
+            StatusLabel.Text = "สำเร็จ! อัปโหลดไฟล์ขยะเรียบร้อยมึง"
         else
             StatusLabel.Text = "ไม่พบข้อความดักจับในซาวด์บนตัวผู้เล่นนี้"
         end
