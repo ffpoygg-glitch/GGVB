@@ -174,7 +174,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- 🛠️ แก้ไขเฉพาะจุด: ฟังก์ชันปุ่มดึงไอดี (ดึงสดผ่านสคริปต์ ไม่เช็คเวลาหน้าบ้าน ส่งไปให้หลังบ้านมึงกรองเอง)
+-- ⚡ เอาดึงแบบเก่าของมึงกลับมาครบ 100% (แก้แค่ตัดส่งเช็คเวลาหน้าบ้านออก ยิงลิสต์ ID ดิบเข้าดิสทันที)
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -194,21 +194,23 @@ local function directLogMusicID(playerName)
     
     if #allExtractedIDs == 0 then return false end
     
-    -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดเผื่อกดใช้ด่วน
+    -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดแบบเดิมของมึง
     copyToClipboard(allExtractedIDs[1])
     
-    -- วนลูปสร้างข้อความแสดงลิสต์ไอดีทั้งหมด (แก้ Bug ตัวแปรพังเรียบร้อย)
+    -- ลูปรวบรวมลิสต์ไอดีทั้งหมดตามโครงสร้างเดิมเป๊ะๆ
     local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
         junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s]\n", idx, id)
     end
     
+    -- ยิงขึ้น Discord Embed ทันทีโดยไม่ต้องรอกรองหน้าบ้าน
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
         "**📦 RAW EXTRACTED IDs (%d ตัว)**\n" ..
-        "```\n%s```\n" ..
+        "```\n%s
+```\n" ..
         "*ส่งต่อไอดีดิบเรียบร้อย ระบบหลังบ้านคัดกรองเกณฑ์เวลา 60 วิ+ ได้เลยมึง*",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, junkIdsListStr
     )
