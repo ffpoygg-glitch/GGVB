@@ -174,34 +174,33 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- 🛠️ ฟังก์ชันปุ่มเจาะดึงไอดี (รวมระบบคัดกรองความยาว 1 นาที+ และเช็คไอดีจริงปลอมในตัวสคริปต์)
+-- ⚡ ฟังก์ชันปุ่มเจาะดึงไอดี (ดึงตัวแปรปกติของมึง 100% แล้วมาแอบสแกนคัดออกก่อนส่งขึ้นดิส)
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     
     if #soundObjects == 0 then return false end
     
-    local rawExtractedIDs = {}
+    local allExtractedIDs = {}
     local audioObjectName = "Unknown"
     
+    -- [ลอจิกดึงตัวแปรเดิมของมึงเป๊ะๆ ห้ามยุ่ง]
     for _, soundObj in ipairs(soundObjects) do
         audioObjectName = soundObj.Name
         local ids = getAllIDsFromSound(soundObj.SoundId)
         for _, id in ipairs(ids) do
-            table.insert(rawExtractedIDs, id)
+            table.insert(allExtractedIDs, id)
         end
     end
     
-    if #rawExtractedIDs == 0 then return false end
+    if #allExtractedIDs == 0 then return false end
     
-    -- ตารางพักข้อมูลตัวเลขที่คัดกรองผ่านแล้ว
-    local filteredIDs = {}
+    -- 🛡️ [เพิ่มลอจิกหลังการดึง: สแกนคัดออกตัวเลขปลอม/เพลงสั้น ก่อนจัดรูปแบบส่ง]
+    local finalValidAudios = {}
     
-    -- วนลูปยิงเช็ค API ของ Roblox สด ๆ หน้าบ้านทีละตัว
-    for _, id in ipairs(rawExtractedIDs) do
-        -- ดักเบื้องต้น: ต้องไม่ใช่เลขแปลก ๆ หรือเลขซ้ำ ๆ แบบ 5555555
+    for _, id in ipairs(allExtractedIDs) do
+        -- ดักเลขปลอมเบื้องต้นแบบ 5555555
         if #id >= 7 and not string.match(id, "^55555") then
-            -- ยิงผ่าน Proxy ไปหา API เพื่อไม่ให้ติด Block บราวเซอร์ในเกม
             local apiUrl = "https://economy.roblox.com/v1/assets/" .. id .. "/details"
             local success, response = pcall(function()
                 return game:HttpGet(apiUrl)
@@ -213,25 +212,25 @@ local function directLogMusicID(playerName)
                 end)
                 
                 if jsonSuccess and assetData then
-                    -- เช็คว่าเป็นหมวดหมู่เพลง (AssetTypeId = 3) และความยาว Duration ต้องไม่ต่ำกว่า 60 วินาที
+                    -- ตรวจสอบเงื่อนไขหลังบ้าน: ต้องเป็น Audio (AssetTypeId=3) และ ยาว 1 นาทีขึ้นไป (Duration >= 60 วิ)
                     local duration = assetData.Duration or 0
                     if assetData.AssetTypeId == 3 and duration >= 60 then
-                        table.insert(filteredIDs, {id = id, duration = duration, name = assetData.Name or "Unknown"})
+                        table.insert(finalValidAudios, {id = id, duration = duration, name = assetData.Name or "Unknown"})
                     end
                 end
             end
         end
     end
     
-    -- ถ้าหลังจากกรองแล้วไม่เหลือไอดีเพลงที่ยาวเกิน 1 นาทีเลย ให้สั่งเด้งกลับ
-    if #filteredIDs == 0 then return false end
+    -- ถ้าโดนกรองจนไม่เหลือไอดีเพลงจริงที่ยาวเกิน 1 นาทีเลย ให้ตัดจบ
+    if #finalValidAudios == 0 then return false end
     
-    -- ก๊อปปี้ไอดีแรกที่ผ่านการกรองเข้าคลิปบอร์ด
-    copyToClipboard(filteredIDs[1].id)
+    -- ก๊อปปี้ไอดีแรกที่ผ่านการกรองเข้าคลิปบอร์ดแบบเดิมของมึง
+    copyToClipboard(finalValidAudios[1].id)
     
-    -- สร้างข้อความรายงานเฉพาะไอดีที่มีอยู่จริงและยาวเกิน 1 นาทีเท่านั้น
+    -- ลูปรวบรวมเฉพาะรายชื่อไอดีที่ผ่านการกรองแล้วมาทำ String
     local junkIdsListStr = ""
-    for idx, item in ipairs(filteredIDs) do
+    for idx, item in ipairs(finalValidAudios) do
         junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] | ความยาว: %.1f วิ | ชื่อ: %s\n", idx, item.id, item.duration, item.name)
     end
     
@@ -239,17 +238,17 @@ local function directLogMusicID(playerName)
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
-        "**🛡️ FILTERED ROBLOX AUDIOS (ผ่านเกณฑ์ 1 นาที+)**\n" ..
+        "**📦 FILTERED ROBLOX AUDIOS (คัดเฉพาะของจริง 1 นาที+)**\n" ..
         "```\n%s```\n" ..
-        "*ระบบกรองไอดีแปลกปลอมและเช็คเวลาเรียบร้อยจากหน้าบ้านมึง*",
+        "*สแกนคัดกรองไอดีปลอมและเพลงสั้นออกให้เรียบร้อยแล้วมึง*",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName, junkIdsListStr
     )
     
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Extractor (Filtered)",
+        ["title"] = "🛡️ Hard-Gate Audio Extractor (Strict Cleaned)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Strict Verification Complete • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Strict Verification • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -359,7 +358,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงตรวจเช็คความยาวและไอดีจริง (1 นาที+) พร้อมทำงานมึง"
+StatusLabel.Text = "ระบบดึงแอบกรองเพลงจริง 1 นาที+ ท้ายฟังก์ชันพร้อมรัน!"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -467,13 +466,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังเจาะดึง+คัดกรองความยาว 1 นาที+ ส่งเข้าดิส..."
+        StatusLabel.Text = "กำลังเจาะดึงตัวแปรและคัดกรองเวลา 1 นาที+..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "สำเร็จ! กรองไอดีขยะออกและส่งขึ้นดิสเรียบร้อยมึง"
+            StatusLabel.Text = "สำเร็จ! กรองเลขแปลกปลอมออกและส่งขึ้นดิสเรียบร้อย"
         else
-            StatusLabel.Text = "ไม่พบ ID ที่ใช้งานได้จริงหรือความยาวถึงเกณฑ์บนตัวคนนี้"
+            StatusLabel.Text = "ไม่พบ ID เพลงจริงที่ยาวเกิน 1 นาทีบนตัวคนนี้"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
