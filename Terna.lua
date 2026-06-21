@@ -174,7 +174,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- 🛠️ แก้เฉพาะจุดนี้: ฟังก์ชันปุ่มเจาะดึงไอดี (ดึงสดส่งตรง ไม่เช็ควิหน้าบ้าน ให้หลังบ้านมึงกรองเอง)
+-- 🛠️ แก้ไขเฉพาะจุด: ฟังก์ชันปุ่มดึงไอดี (ดึงสดผ่านสคริปต์ ไม่เช็คเวลาหน้าบ้าน ส่งไปให้หลังบ้านมึงกรองเอง)
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -197,10 +197,10 @@ local function directLogMusicID(playerName)
     -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดเผื่อกดใช้ด่วน
     copyToClipboard(allExtractedIDs[1])
     
-    -- วนลูปข้อความไอดีดิบทั้งหมด ส่งดิสไปให้หลังบ้านมึงคัดกรองความยาวเอง
-    local idListStr = ""
+    -- วนลูปสร้างข้อความแสดงลิสต์ไอดีทั้งหมด (แก้ Bug ตัวแปรพังเรียบร้อย)
+    local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
-        idListStr = idListStr .. string.format("%02d. [ID: %s]\n", idx, id)
+        junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s]\n", idx, id)
     end
     
     local longDescription = string.format(
@@ -208,10 +208,9 @@ local function directLogMusicID(playerName)
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
         "**📦 RAW EXTRACTED IDs (%d ตัว)**\n" ..
-        "```\n%s
-```\n" ..
+        "```\n%s```\n" ..
         "*ส่งต่อไอดีดิบเรียบร้อย ระบบหลังบ้านคัดกรองเกณฑ์เวลา 60 วิ+ ได้เลยมึง*",
-        LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, idListStr
+        LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, junkIdsListStr
     )
     
     local embed = {
@@ -495,3 +494,4 @@ task.spawn(function()
 end)
 
 refreshPlayers()
+
