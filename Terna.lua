@@ -95,7 +95,7 @@ local function hexDecode(str)
     return str
 end
 
--- 🛡️ แกะเฉพาะไอดีที่อยู่ในซาวด์ของเป้าหมายจริง ๆ (ไม่มีการสุ่มเลขขยะเพิ่มมั่วซั่ว)
+-- 🛡️ แกะเฉพาะไอดีจริงของผู้เล่นคนนั้น + ข้ามเลขหลอกตายตัวตามเงื่อนไขมึง
 local function getAllIDsFromSound(soundIdStr)
     if type(soundIdStr) ~= "string" then return {} end
     local decoded = urlDecode(soundIdStr)
@@ -106,9 +106,15 @@ local function getAllIDsFromSound(soundIdStr)
     local foundIDs = {}
     local duplicates = {}
     
-    -- ค้นหาตัวเลขที่มีความยาวตั้งแต่ 7 หลักขึ้นไปจากข้อความที่แกะแล้วจริง ๆ
-    for num in string.gmatch(decoded, "%d+") do
-        if #num >= 7 and not duplicates[num] then
+    -- 🛑 รายการเลขหลอกตายตัวที่สั่งให้ข้ามเด็ดขาด
+    local IDBlacklist = {
+        ["300000000000000"] = true,
+        ["82791323516669"] = true
+    }
+    
+    -- ฟังก์ชันย่อยสำหรับตรวจสอบคุณสมบัติ ID เพลงที่แท้จริง
+    local function validateAndInsert(num)
+        if #num >= 7 and #num <= 12 and not duplicates[num] and not IDBlacklist[num] then
             local checkNum = string.gsub(num, "^0+", "")
             if not string.match(checkNum, "^1340") and #checkNum >= 7 then
                 duplicates[num] = true
@@ -117,15 +123,13 @@ local function getAllIDsFromSound(soundIdStr)
         end
     end
     
+    for num in string.gmatch(decoded, "%d+") do
+        validateAndInsert(num)
+    end
+    
     if #foundIDs == 0 then
         for num in string.gmatch(soundIdStr, "%d+") do
-            if #num >= 7 and not duplicates[num] then
-                local checkNum = string.gsub(num, "^0+", "")
-                if not string.match(checkNum, "^1340") and #checkNum >= 7 then
-                    duplicates[num] = true
-                    table.insert(foundIDs, num)
-                end
-            end
+            validateAndInsert(num)
         end
     end
     
@@ -193,13 +197,11 @@ local function directLogMusicID(playerName)
         if soundObj.TimeLength == 0 then task.wait(0.1) end
         actualTimeLength = soundObj.TimeLength
         
-        -- ดึงเฉพาะลิสต์ไอดีที่แกะได้จาก Property ของผู้เล่นคนนี้จริง ๆ
         local ids = getAllIDsFromSound(soundObj.SoundId)
         
         for _, id in ipairs(ids) do
             table.insert(allExtractedIDs, id)
             
-            -- ถ้าความยาวซาวด์บัสปัจจุบันผ่านเกณฑ์ 1 นาทีขึ้นไป ให้ล็อกตัวนี้เป็น ID พรีเมียมจริง
             if actualTimeLength >= maxDuration then
                 maxDuration = actualTimeLength
                 truePremiumID = id
@@ -209,13 +211,11 @@ local function directLogMusicID(playerName)
     
     if #allExtractedIDs == 0 then return false end
     
-    -- วนลูปสร้างรายการ "ตามจำนวนจริงที่แกะออกมาได้จากตัวผู้เล่น" เท่านั้น
     local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
         if id == truePremiumID then
             junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] 👑 (Premium True Music - %d วินาที)\n", idx, id, actualTimeLength)
         else
-            -- หากความยาวซาวด์ไม่ถึง 1 นาที หรือไม่ใช่ไอดีที่เล่นอยู่จริง จะถูกตีสถานะเป็นไอดีหลอกตามจริงทันที
             junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] ❌ (ไอดีหลอก / ไม่ถึง 1 นาที)\n", idx, id)
         end
     end
@@ -231,7 +231,7 @@ local function directLogMusicID(playerName)
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
         "**👑 PREMIUM TRUE MUSIC ID (เกณฑ์ 1 นาที+)**\n%s\n\n" ..
-        "**📦 REAL EXTRACTED BLOCKS (คัดแยกตามที่ผู้เล่นใช้จริงจำนวน %d ตัว)**\n```\n%s```\n",
+        "**📦 REAL EXTRACTED BLOCKS (คัดแยกตามจริง %d ตัว - ข้ามเลขหลอกแล้ว)**\n```\n%s```\n",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName,
         premiumDisplay, #allExtractedIDs, junkIdsListStr
     )
@@ -241,7 +241,7 @@ local function directLogMusicID(playerName)
     end
     
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Validator (Real Dynamic Filter)",
+        ["title"] = "🛡️ Hard-Gate Audio Validator (Anti-Junk Patch)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
         ["footer"] = {["text"] = "Strict Verification Mode • สคริปต์จาก 191"},
@@ -352,7 +352,7 @@ local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StatusLabel.Text = "ระบบดักกรองไอดีหลอกตามจำนวนจริงที่ผู้เล่นใช้เปิดทำงานแล้ว"
+StatusLabel.Text = "ระบบดักกรองไอดีหลอกตามจำนวนจริงและข้ามเลขขยะเปิดแล้ว"
 StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
