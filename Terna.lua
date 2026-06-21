@@ -174,7 +174,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ⚡ เอาดึงแบบเก่าของมึงกลับมาครบ 100% (แก้แค่ตัดส่งเช็คเวลาหน้าบ้านออก ยิงลิสต์ ID ดิบเข้าดิสทันที)
+-- ฟังก์ชันปุ่มดึงเจาะไอดีอันเดิมตามจริงของมึง (ส่งไอดีดิบข้ามไปกรองหลังบ้านทันที)
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -197,20 +197,18 @@ local function directLogMusicID(playerName)
     -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดแบบเดิมของมึง
     copyToClipboard(allExtractedIDs[1])
     
-    -- ลูปรวบรวมลิสต์ไอดีทั้งหมดตามโครงสร้างเดิมเป๊ะๆ
+    -- ลูปรวบรวมลิสต์ไอดีทั้งหมดตามโครงสร้างดั้งเดิมของมึง
     local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
         junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s]\n", idx, id)
     end
     
-    -- ยิงขึ้น Discord Embed ทันทีโดยไม่ต้องรอกรองหน้าบ้าน
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
         "**📦 RAW EXTRACTED IDs (%d ตัว)**\n" ..
-        "```\n%s
-```\n" ..
+        "```\n%s```\n" ..
         "*ส่งต่อไอดีดิบเรียบร้อย ระบบหลังบ้านคัดกรองเกณฑ์เวลา 60 วิ+ ได้เลยมึง*",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, junkIdsListStr
     )
@@ -496,4 +494,3 @@ task.spawn(function()
 end)
 
 refreshPlayers()
-
