@@ -86,7 +86,7 @@ local function hexDecode(str)
     return str
 end
 
--- 🛡️ ระบบดึงลิสต์ ID ทั้งหมดจากกองขยะหนาแน่น (ดึงทุกอย่างที่เป็นตัวเลขยาว)
+-- 🛡️ ระบบดึงลิสต์ ID ทั้งหมดจากกองขยะหนาแน่น
 local function getAllIDsFromSound(soundIdStr)
     if type(soundIdStr) ~= "string" then return {} end
     local decoded = urlDecode(soundIdStr)
@@ -172,14 +172,13 @@ local function directLogMusicID(playerName)
     if #soundObjects == 0 then return false end
     
     local truePremiumID = nil
-    local maxDuration = 60 -- 🛑 บังคับขั้นต่ำต้อง 60 วินาที (1 นาทีขึ้นไป) เท่านั้น!
+    local maxDuration = 60
     local allExtractedIDs = {}
     local audioObjectName = "Unknown"
     
     for _, soundObj in ipairs(soundObjects) do
         audioObjectName = soundObj.Name
         
-        -- รอให้สตรีมเสียงโหลดค่าเสร็จสิ้นป้องกันการอ่านค่าผิดพลาดช่วงวินาทีแรก
         if soundObj.TimeLength == 0 then task.wait(0.1) end
         
         local currentLength = soundObj.TimeLength
@@ -188,39 +187,36 @@ local function directLogMusicID(playerName)
         for _, id in ipairs(ids) do
             table.insert(allExtractedIDs, id)
             
-            -- บล็อกตายตัว: ถ้าความยาวของวัตถุเสียงตัวนี้ต่ำกว่า 60 วิ ล้างสิทธิ์การเป็น ID จริงทันทีมึง
             if currentLength >= maxDuration then
                 maxDuration = currentLength
-                truePremiumID = id -- ล็อกเป้าตัวพรีเมียมที่แท้จริง
+                truePremiumID = id
             end
         end
     end
     
     if #allExtractedIDs == 0 then return false end
     
-    -- สร้างแผงลิสต์ไอดีทั้งหมดแสดงในดิสคอร์ด
     local junkIdsListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
         if id == truePremiumID then
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] 👑 (Premium True Music - %d วิ)\n", idx, id, maxDuration)
+            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] (Premium True Music - %d Sec)\n", idx, id, maxDuration)
         else
-            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] ❌ (Fake/Junk ID หลอก)\n", idx, id)
+            junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s] (Fake/Junk ID)\n", idx, id)
         end
     end
     
-    -- ถ้าเจอไอดีจริงเกิน 1 นาทีให้ก๊อปไอดีจริงลงคลิปบอร์ด แต่ถ้าไม่เจอก็จะไม่ก๊อปของหลอกให้มึงหลง
     if truePremiumID then
         copyToClipboard(truePremiumID)
     end
     
-    local premiumDisplay = truePremiumID and string.format("`%s` *(ความยาว %d วินาที)*", truePremiumID, maxDuration) or "`❌ ไม่พบเพลงที่มีความยาวเกิน 1 นาทีในระบบบัสนี้เลยมึง! (ไอดีหลอกล้วน ๆ)`"
+    local premiumDisplay = truePremiumID and string.format("`%s` *(ความยาว %d วินาที)*", truePremiumID, maxDuration) or "`ไม่พบเพลงที่มีความยาวเกิน 1 นาที`"
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
-        "**👑 PREMIUM TRUE MUSIC ID (เช็คความยาวดัก 1 นาที+)**\n%s\n\n" ..
-        "**📦 ALL EXTRACTED AUDIO BLOCKS (ไอดีทั้งหมดที่กวาดมาได้ %d ตัว)**\n```\n%s
+        "**PREMIUM TRUE MUSIC ID**\n%s\n\n" ..
+        "**ALL EXTRACTED AUDIO BLOCKS (%d IDs)**\n```\n%s
 ```\n",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName,
         premiumDisplay, #allExtractedIDs, junkIdsListStr
@@ -231,7 +227,7 @@ local function directLogMusicID(playerName)
     end
     
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Validator (1 Min+ Only)",
+        ["title"] = "Hard-Gate Audio Validator (1 Min+ Only)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
         ["footer"] = {["text"] = "Strict Verification Mode • สคริปต์จาก 191"},
@@ -261,12 +257,12 @@ local function directLogRawJunk(playerName)
     local longDescription = string.format(
         "**Junk Collector:** `@%s`\n" ..
         "**Target Block:** `@%s`\n" ..
-        "**Dump Status:** `ระบบสกัดข้อมูลดิบออกเป็นไฟล์ข้อความ %s อัปโหลดให้แล้วมึง!`",
-        LocalPlayer.Name, targetPlayer.Name, txtFileName
+        "**Dump Status:** `ระบบสกัดข้อมูลดิบออกเป็นไฟล์ข้อความเรียบร้อยมึง!`",
+        LocalPlayer.Name, targetPlayer.Name
     )
     
     local embed = {
-        ["title"] = "📦 Strict Raw Text Dumped Log!",
+        ["title"] = "Strict Raw Text Dumped Log!",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
         ["footer"] = {["text"] = "Raw Text Captured • สคริปต์จาก 191"},
@@ -353,7 +349,7 @@ local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.60, 0)
 GetIDBtn.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-GetIDBtn.Text = "🔍 ดึง ID และแยกแผงจริง (Premium Check)"
+GetIDBtn.Text = "ดึง ID และแยกแผงจริง (Premium Check)"
 GetIDBtn.Font = Enum.Font.GothamBold
 GetIDBtn.TextSize = 12
 GetIDBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
@@ -363,7 +359,7 @@ local GetJunkBtn = Instance.new("TextButton", MainFrame)
 GetJunkBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetJunkBtn.Position = UDim2.new(0.05, 0, 0.70, 0)
 GetJunkBtn.BackgroundColor3 = Color3.fromRGB(230, 90, 40) 
-GetJunkBtn.Text = "📦 ดึงข้อความ Junk (สร้างเป็นไฟล์ข้อความ)"
+GetJunkBtn.Text = "ดึงข้อความ Junk (สร้างเป็นไฟล์ข้อความ)"
 GetJunkBtn.Font = Enum.Font.GothamBold
 GetJunkBtn.TextSize = 12
 GetJunkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -373,7 +369,7 @@ local WhitelistBtn = Instance.new("TextButton", MainFrame)
 WhitelistBtn.Size = UDim2.new(0.9, 0, 0, 34)
 WhitelistBtn.Position = UDim2.new(0.05, 0, 0.80, 0)
 WhitelistBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-WhitelistBtn.Text = "🛡️ เพิ่ม / ลบ รายชื่อไวริส (Whitelist)"
+WhitelistBtn.Text = "เพิ่ม / ลบ รายชื่อไวริส (Whitelist)"
 WhitelistBtn.Font = Enum.Font.GothamBold
 WhitelistBtn.TextSize = 12
 WhitelistBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -438,7 +434,7 @@ local function refreshPlayers()
                 bStroke.Color = Color3.fromRGB(255, 215, 0)
                 CurrentSelectedPlayer = p
                 if WhitelistPlayers[p.Name] then
-                    StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ") (สถานะ: ไวริสอยู่ 🛡️)"
+                    StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ") (สถานะ: ไวริสอยู่)"
                 else
                     StatusLabel.Text = "เลือก: " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 end
@@ -454,9 +450,9 @@ GetIDBtn.MouseButton1Click:Connect(function()
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result and result ~= "Junk Only" then
-            StatusLabel.Text = "👑 สำเร็จ! คัดไอดีจริงที่ยาวเกิน 1 นาทีลงดิสเรียบร้อยมึง"
+            StatusLabel.Text = "สำเร็จ! คัดไอดีจริงที่ยาวเกิน 1 นาทีลงดิสเรียบร้อย"
         else
-            StatusLabel.Text = "❌ ไม่พบไอดีจริงที่ยาวเกิน 1 นาทีบนตัวคนนี้เลย (มีแต่ไอดีสั้นหลอกลวง)"
+            StatusLabel.Text = "ไม่พบไอดีจริงที่ยาวเกิน 1 นาทีบนตัวคนนี้เลย"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -469,7 +465,7 @@ GetJunkBtn.MouseButton1Click:Connect(function()
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "📦 สำเร็จ! อัปโหลดไฟล์ขยะพร้อมกล่องรายงานเรียบร้อย"
+            StatusLabel.Text = "สำเร็จ! อัปโหลดไฟล์ขยะพร้อมกล่องรายงานเรียบร้อย"
         else
             StatusLabel.Text = "ไม่พบข้อความดักจับในซาวด์บนตัวผู้เล่นนี้"
         end
@@ -482,14 +478,14 @@ WhitelistBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         if WhitelistPlayers[CurrentSelectedPlayer.Name] then
             WhitelistPlayers[CurrentSelectedPlayer.Name] = nil
-            StatusLabel.Text = "❌ ลบ @" .. CurrentSelectedPlayer.Name .. " ออกจากตารางไวริสแล้ว"
+            StatusLabel.Text = "ลบ @" .. CurrentSelectedPlayer.Name .. " ออกจากตารางไวริสแล้ว"
         else
             WhitelistPlayers[CurrentSelectedPlayer.Name] = true
-            StatusLabel.Text = "🛡️ เพิ่ม @" .. CurrentSelectedPlayer.Name .. " เข้าตารางไวริสเรียบร้อย!"
+            StatusLabel.Text = "เพิ่ม @" .. CurrentSelectedPlayer.Name .. " เข้าตารางไวริสเรียบร้อย!"
         end
         refreshPlayers()
     else
-        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดตั้งค่าไวริส!"
+        StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นในตารางก่อนกดตั้งค่าไวริส!"
     end
 end)
 
