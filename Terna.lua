@@ -70,7 +70,7 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== [ ระบบถอดรหัสและดึง ID เฉพาะที่ผู้เล่นใช้จริง ] ====================
+-- ==================== [ ระบบถอดรหัสและดึง ID เดิมของมึง (ห้ามแตะ) ] ====================
 
 local function urlDecode(str)
     if not str then return "" end
@@ -95,7 +95,6 @@ local function hexDecode(str)
     return str
 end
 
--- 🛡️ เจาะดึงเลข ID ตามจริงจากข้อความผู้เล่น + สั่งข้ามเลขขยะระเบิดระบบ 2 ตัว
 local function getAllIDsFromSound(soundIdStr)
     if type(soundIdStr) ~= "string" then return {} end
     local decoded = urlDecode(soundIdStr)
@@ -106,7 +105,6 @@ local function getAllIDsFromSound(soundIdStr)
     local foundIDs = {}
     local duplicates = {}
     
-    -- 🛑 รายการเลขขยะหลอกตาที่สั่งให้ข้ามเด็ดขาดไม่ดึงมา
     local IDBlacklist = {
         ["300000000000000"] = true,
         ["82791323516669"] = true
@@ -140,7 +138,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงทั้งหมดบนตัวผู้เล่น ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
 
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
@@ -176,8 +174,7 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ==================== [ ระบบเจาะเพลงแล้วดึงส่งตรงเข้า Webhook ทันที ] ====================
-
+-- 🛠️ แก้เฉพาะจุดนี้: ฟังก์ชันปุ่มเจาะดึงไอดี (ดึงสดส่งตรง ไม่เช็ควิหน้าบ้าน ให้หลังบ้านมึงกรองเอง)
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -197,30 +194,31 @@ local function directLogMusicID(playerName)
     
     if #allExtractedIDs == 0 then return false end
     
-    -- ก๊อปปี้ตัวแรกเข้า Clipboard เผื่อไว้ด่วน
+    -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดเผื่อกดใช้ด่วน
     copyToClipboard(allExtractedIDs[1])
     
-    -- วนลูปสร้างข้อความไอดีตามจำนวนจริงที่แกะมาได้ ส่งไปให้หลังบ้านมึงเช็คความยาววิเอาเอง
+    -- วนลูปข้อความไอดีดิบทั้งหมด ส่งดิสไปให้หลังบ้านมึงคัดกรองความยาวเอง
     local idListStr = ""
     for idx, id in ipairs(allExtractedIDs) do
-        idListStr = idListStr .. string.format("%02d. [ID: %s] -> (ส่งต่อให้ระบบหลังบ้านมึงตรวจสอบความยาว)\n", idx, id)
+        idListStr = idListStr .. string.format("%02d. [ID: %s]\n", idx, id)
     end
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n" ..
         "**Audio Object Name:** `%s`\n\n" ..
-        "**📦 EXTRACTED REAL IDs (แกะสดตามจริงจำนวน %d ตัว)**\n" ..
-        "```\n%s```\n" ..
-        "*หมายเหตุ: ระบบหน้าบ้านทำการดึงและส่งต่อข้อมูลดิบเรียบร้อย ให้สคริปต์หลังบ้านมึงคัดเกณฑ์ 60 วิ+ เอาเองเลย!*",
+        "**📦 RAW EXTRACTED IDs (%d ตัว)**\n" ..
+        "```\n%s
+```\n" ..
+        "*ส่งต่อไอดีดิบเรียบร้อย ระบบหลังบ้านคัดกรองเกณฑ์เวลา 60 วิ+ ได้เลยมึง*",
         LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, idListStr
     )
     
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Extractor (Direct Pass-Through Mode)",
+        ["title"] = "🛡️ Hard-Gate Audio Extractor (Pass-Through)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Raw Pass Data • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Raw Pass • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -228,6 +226,7 @@ local function directLogMusicID(playerName)
     return true
 end
 
+-- ฟังก์ชันปุ่มดึงข้อความขยะเดิมของมึง (ห้ามแก้)
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -263,7 +262,7 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== [ หน้าต่างตัวควบคุม UI ] ====================
+-- ==================== [ หน้าต่างควบคุม UI (โครงสร้างเดิมของมึงครบถ้วน) ] ====================
 
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -327,9 +326,10 @@ Layout.Padding = UDim.new(0, 4)
 local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
-StatusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StatusLabel.Text = "โหมดดึงไอดีสดส่งตรงเข้า Webhook ไม่เช็คเวลาหน้าบ้านเปิดทำงาน"
-StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+StatusLabel.BackgroundTransparency = 0.9
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (คัดกรองเวลาที่หลังบ้าน)"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
 StatusLabel.TextWrapped = true
@@ -436,13 +436,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังเจาะดึงเลขไอดีและส่งเข้า Webhook ทันที..."
+        StatusLabel.Text = "กำลังเจาะดึงเลขไอดีส่งตรงเข้าดิส..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "สำเร็จ! ส่งไอดีทั้งหมดขึ้นดิสให้หลังบ้านมึงกรองแล้ว"
         else
-            StatusLabel.Text = "ไม่พบ ID ใดๆ ใน String บนตัวผู้เล่นคนนี้"
+            StatusLabel.Text = "ไม่พบ ID ใดๆ บนตัวผู้เล่นคนนี้"
         end
     else
         StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
