@@ -174,50 +174,112 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ฟังก์ชันปุ่มดึงเจาะไอดีอันเดิมตามจริงของมึง (ดึงตัวแปรปกติ ส่งขึ้นดิสตรงๆ ไม่มีการเช็คความยาวใดๆ ทั้งสิ้น)
+-- ================ [ ฟังก์ชันกรองเฉพาะ ID 15 หลัก ] =================
+local function filter15DigitIDs(ids)
+    local result = {}
+    for _, id in ipairs(ids) do
+        if type(id) == "string" and #id == 15 and tonumber(id) then
+            table.insert(result, id)
+        end
+    end
+    return result
+end
+
+-- ==================== [ ปุ่มดึงแบบเจาะ (เฉพาะ 15 หลัก + ตรวจสอบความยาว) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     
     if #soundObjects == 0 then return false end
     
-    local allExtractedIDs = {}
-    local audioObjectName = "Unknown"
+    -- ตารางเก็บข้อมูล ID แต่ละตัว: id -> { timeLength, soundName }
+    local idData = {}
     
     for _, soundObj in ipairs(soundObjects) do
-        audioObjectName = soundObj.Name
         local ids = getAllIDsFromSound(soundObj.SoundId)
-        for _, id in ipairs(ids) do
-            table.insert(allExtractedIDs, id)
+        local filtered = filter15DigitIDs(ids)
+        if #filtered > 0 then
+            -- อ่านความยาวของไฟล์เสียง (TimeLength)
+            local timeLen = soundObj.TimeLength or 0
+            -- ถ้ายังเป็น 0 ให้รอสักครู่แล้วลองใหม่ (บางครั้งโหลดช้า)
+            if timeLen == 0 then
+                task.wait(0.2)
+                timeLen = soundObj.TimeLength or 0
+            end
+            
+            for _, id in ipairs(filtered) do
+                -- ถ้ายังไม่มี id นี้ในตาราง หรือมีแล้วแต่ timeLen มากกว่า ให้เก็บค่าสูงสุด
+                if not idData[id] then
+                    idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
+                else
+                    if timeLen > idData[id].timeLength then
+                        idData[id].timeLength = timeLen
+                        idData[id].soundName = soundObj.Name
+                    end
+                end
+            end
         end
     end
     
-    if #allExtractedIDs == 0 then return false end
+    if next(idData) == nil then return false end
     
-    -- ก๊อปปี้ไอดีแรกเข้าคลิปบอร์ดแบบเดิมของมึง
-    copyToClipboard(allExtractedIDs[1])
-    
-    -- ลูปรวบรวมลิสต์ไอดีทั้งหมดตามโครงสร้างดั้งเดิมของมึง
-    local junkIdsListStr = ""
-    for idx, id in ipairs(allExtractedIDs) do
-        junkIdsListStr = junkIdsListStr .. string.format("%02d. [ID: %s]\n", idx, id)
+    -- แยก ID จริง (>=60s) และ ID หลอก (<60s)
+    local realIDs = {}
+    local fakeIDs = {}
+    for id, info in pairs(idData) do
+        if info.timeLength >= 60 then
+            table.insert(realIDs, {id = id, len = info.timeLength})
+        else
+            table.insert(fakeIDs, {id = id, len = info.timeLength})
+        end
     end
+    
+    -- เรียงลำดับตาม ID
+    table.sort(realIDs, function(a,b) return a.id < b.id end)
+    table.sort(fakeIDs, function(a,b) return a.id < b.id end)
+    
+    -- สร้างข้อความแสดงรายการ
+    local listStr = ""
+    if #realIDs > 0 then
+        listStr = listStr .. "**✅ REAL IDs (≥60s):**\n"
+        for i, item in ipairs(realIDs) do
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
+        end
+    end
+    if #fakeIDs > 0 then
+        if #realIDs > 0 then listStr = listStr .. "\n" end
+        listStr = listStr .. "**❌ FAKE IDs (<60s):**\n"
+        for i, item in ipairs(fakeIDs) do
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
+        end
+    end
+    
+    -- คัดลอก ID ตัวแรก (ถ้ามี Real ให้ใช้ Real ตัวแรก ไม่เช่นนั้นใช้ Fake ตัวแรก)
+    local copyId
+    if #realIDs > 0 then
+        copyId = realIDs[1].id
+    elseif #fakeIDs > 0 then
+        copyId = fakeIDs[1].id
+    else
+        -- fallback (ไม่น่าจะเกิด)
+        copyId = next(idData)
+    end
+    copyToClipboard(copyId)
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
-        "**Target Player:** `@%s`\n" ..
-        "**Audio Object Name:** `%s`\n\n" ..
-        "**📦 RAW EXTRACTED IDs (%d ตัว)**\n" ..
-        "```\n%s```\n" ..
-        "*ส่งต่อไอดีดิบเรียบร้อย ระบบหลังบ้านคัดกรองอัตโนมัติได้เลยมึง*",
-        LocalPlayer.Name, targetPlayer.Name, audioObjectName, #allExtractedIDs, junkIdsListStr
+        "**Target Player:** `@%s`\n\n" ..
+        "**📊 สรุป:** `%d Real IDs` , `%d Fake IDs`\n\n" ..
+        "%s\n" ..
+        "*คัดลอก ID แรก (จัดลำดับ Real ก่อน) ไปคลิปบอร์ดแล้ว*",
+        LocalPlayer.Name, targetPlayer.Name, #realIDs, #fakeIDs, listStr
     )
     
     local embed = {
-        ["title"] = "🛡️ Hard-Gate Audio Extractor (Pass-Through)",
+        ["title"] = "🎵 Audio ID Validator (15‑digit + Duration Check)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Raw Pass • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake Classifier • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -225,43 +287,54 @@ local function directLogMusicID(playerName)
     return true
 end
 
--- ฟังก์ชันปุ่มดึงข้อความขยะเดิมของมึง (ห้ามแก้)
+-- ==================== [ ปุ่มดึงขยะ Raw ดิบ (ทุกเสียง) ] ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     
     if #soundObjects == 0 then return false end
-    local soundObj = soundObjects[1]
     
-    local rawJunk = soundObj.SoundId
-    copyToClipboard(rawJunk)
+    -- รวบรวม SoundId ดิบของทุกเสียง
+    local rawDump = {}
+    for i, soundObj in ipairs(soundObjects) do
+        table.insert(rawDump, string.format(
+            "Sound #%02d | Name: %s | SoundId: %s",
+            i, soundObj.Name, soundObj.SoundId
+        ))
+    end
     
-    local fileData = string.format(
-        "=== HONKUKI STRICT SCANNER RAW JUNK ===\nRun By: @%s\nTarget: @%s\nSound Name: %s\n=======================================\n\n[RAW DATA]:\n%s",
-        LocalPlayer.Name, targetPlayer.Name, soundObj.Name, rawJunk
+    local rawJunkAll = table.concat(rawDump, "\n")
+    local fullDump = string.format(
+        "=== RAW JUNK DUMP (ALL SOUNDS) ===\nRun By: @%s\nTarget: @%s\nTotal Sounds: %d\n=======================================\n\n%s",
+        LocalPlayer.Name, targetPlayer.Name, #soundObjects, rawJunkAll
     )
     
-    local txtFileName = "strict_junk_" .. targetPlayer.Name .. ".txt"
+    -- คัดลอก SoundId ตัวแรก (ดิบ) เข้าคลิปบอร์ด (ตามเดิม)
+    if #soundObjects > 0 then
+        copyToClipboard(soundObjects[1].SoundId)
+    end
+    
+    local txtFileName = "raw_junk_all_" .. targetPlayer.Name .. ".txt"
     local longDescription = string.format(
         "**Junk Collector:** `@%s`\n" ..
         "**Target Block:** `@%s`\n" ..
-        "**Dump Status:** `ระบบสกัดข้อมูลดิบออกเป็นไฟล์ข้อความเรียบร้อยมึง!`",
-        LocalPlayer.Name, targetPlayer.Name
+        "**Dump Status:** `สกัด SoundId ดิบทั้งหมด (%d เสียง) สำเร็จ!`",
+        LocalPlayer.Name, targetPlayer.Name, #soundObjects
     )
     
     local embed = {
-        ["title"] = "Strict Raw Text Dumped Log!",
+        ["title"] = "Strict Raw Text Dumped Log (All Sounds)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Raw Text Captured • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Raw All Sounds • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
-    sendToDiscordFile(txtFileName, fileData, embed)
+    sendToDiscordFile(txtFileName, fullDump, embed)
     return true
 end
 
--- ==================== [ หน้าต่างควบคุม UI (โครงสร้างเดิมของมึงครบถ้วน) ] ====================
+-- ==================== [ หน้าต่างควบคุม UI (เหมือนเดิม) ] ====================
 
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -433,33 +506,35 @@ local function refreshPlayers()
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y)
 end
 
+-- ==================== [ ปุ่มกดทำงาน ] ====================
+
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังเจาะดึงตัวแปรส่งตรงเข้าดิส..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID 15 หลักและตรวจสอบความยาว..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "สำเร็จ! ส่งไอดีดิบทั้งหมดขึ้นดิสให้ระบบหลังบ้านกรองอัตโนมัติแล้ว"
+            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยกจริง/หลอกขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
         else
-            StatusLabel.Text = "ไม่พบ ID ใดๆ บนตัวผู้เล่นคนนี้"
+            StatusLabel.Text = "❌ ไม่พบ ID 15 หลักใด ๆ บนตัวผู้เล่นคนนี้"
         end
     else
-        StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
     end
 end)
 
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "กำลังดูดข้อมูลขยะสร้างไฟล์ Text..."
+        StatusLabel.Text = "📦 กำลังดึงข้อมูลขยะดิบ (ทุกเสียง)..."
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "สำเร็จ! อัปโหลดไฟล์ขยะเรียบร้อยมึง"
+            StatusLabel.Text = "✅ สำเร็จ! ส่งไฟล์ขยะดิบทั้งหมดเรียบร้อย"
         else
-            StatusLabel.Text = "ไม่พบข้อความดักจับในซาวด์บนตัวผู้เล่นนี้"
+            StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
         end
     else
-        StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
     end
 end)
 
@@ -467,24 +542,26 @@ WhitelistBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         if WhitelistPlayers[CurrentSelectedPlayer.Name] then
             WhitelistPlayers[CurrentSelectedPlayer.Name] = nil
-            StatusLabel.Text = "ลบ @" .. CurrentSelectedPlayer.Name .. " ออกจากตารางไวริสแล้ว"
+            StatusLabel.Text = "🗑️ ลบ @" .. CurrentSelectedPlayer.Name .. " ออกจากตารางไวริสแล้ว"
         else
             WhitelistPlayers[CurrentSelectedPlayer.Name] = true
-            StatusLabel.Text = "เพิ่ม @" .. CurrentSelectedPlayer.Name .. " เข้าตารางไวริสเรียบร้อย!"
+            StatusLabel.Text = "✅ เพิ่ม @" .. CurrentSelectedPlayer.Name .. " เข้าตารางไวริสเรียบร้อย!"
         end
         refreshPlayers()
     else
-        StatusLabel.Text = "โปรดเลือกชื่อผู้เล่นในตารางก่อนกดตั้งค่าไวริส!"
+        StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นในตารางก่อนกดตั้งค่าไวริส!"
     end
 end)
 
 RefreshBtn.MouseButton1Click:Connect(refreshPlayers)
+
 Players.PlayerAdded:Connect(refreshPlayers)
 Players.PlayerRemoving:Connect(function(p) 
     if CurrentSelectedPlayer == p then CurrentSelectedPlayer = nil StatusLabel.Text = "โปรดเลือกผู้เล่น..." end 
     if WhitelistPlayers[p.Name] then WhitelistPlayers[p.Name] = nil end
     refreshPlayers() 
 end)
+
 ToggleBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
 
 task.spawn(function()
