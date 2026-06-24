@@ -106,13 +106,22 @@ local function deepDecode(str)
     return str
 end
 
--- ==================== [ ฟังก์ชันดึงตัวเลขทั้งหมดจากข้อความ ] ====================
-local function extractAllNumbers(str)
-    local nums = {}
-    for num in string.gmatch(str, "%d+") do
-        table.insert(nums, num)
+-- ==================== [ ฟังก์ชันดึง ID หลัง 69%64= และ &id= ทั้งหมด ] ====================
+local function extractIDsFromPattern(text)
+    local ids = {}
+    -- ค้นหา 69%64=... 
+    for pattern in string.gmatch(text, "69%%64=([^&]*)") do
+        for num in string.gmatch(pattern, "%d+") do
+            table.insert(ids, num)
+        end
     end
-    return nums
+    -- ค้นหา &id=...
+    for pattern in string.gmatch(text, "&id=([^&]*)") do
+        for num in string.gmatch(pattern, "%d+") do
+            table.insert(ids, num)
+        end
+    end
+    return ids
 end
 
 -- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ ] ====================
@@ -172,7 +181,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (แก้ TimeLength แล้ว) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (ปรับปรุง: ดึง ID หลังตัวแปรทุกตัว + แยกตาม TimeLength) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -186,49 +195,30 @@ local function directLogMusicID(playerName)
         local decoded = deepDecode(rawId)
         local searchText = (decoded ~= "" and decoded) or rawId
         
-        local extractedIds = {}
+        -- ดึง ID จาก 69%64= และ &id= (ทุกตัว)
+        local extractedIds = extractIDsFromPattern(searchText)
         
-        -- 1) ค้นหา 69%64=
-        local pos = string.find(searchText, "69%%64=")
-        if pos then
-            local after = string.sub(searchText, pos + 6)
-            local num = string.match(after, "^%d+")
-            if num then table.insert(extractedIds, num) end
-        end
-        
-        -- 2) ค้นหา &id=
-        local pos2 = string.find(searchText, "&id=")
-        if pos2 then
-            local after = string.sub(searchText, pos2 + 4)
-            local num = string.match(after, "^%d+")
-            if num then table.insert(extractedIds, num) end
-        end
-        
-        -- 3) ถ้าไม่เจอ ดึงตัวเลขทั้งหมด
+        -- ถ้าไม่เจอ ให้ดึงตัวเลขทั้งหมดจาก searchText
         if #extractedIds == 0 then
-            local allNums = extractAllNumbers(searchText)
-            for _, num in ipairs(allNums) do
+            for num in string.gmatch(searchText, "%d+") do
                 table.insert(extractedIds, num)
             end
         end
         
         if #extractedIds > 0 then
-            -- ***** แก้ไขการอ่าน TimeLength *****
+            -- อ่าน TimeLength และแปลงหน่วย
             local timeLen = soundObj.TimeLength or 0
-            
-            -- รอให้โหลดจนกว่าจะมีค่า (รอสูงสุด 2 วินาที)
             local waitCount = 0
             while timeLen == 0 and waitCount < 20 do
                 task.wait(0.1)
                 timeLen = soundObj.TimeLength or 0
                 waitCount = waitCount + 1
             end
-            
-            -- ถ้าค่า > 1000 แปลว่าเป็นมิลลิวินาที ให้แปลงเป็นวินาที
             if timeLen > 1000 then
                 timeLen = timeLen / 1000
             end
             
+            -- เก็บ ID แต่ละตัว พร้อม TimeLength ของ Sound นี้
             for _, id in ipairs(extractedIds) do
                 if not idData[id] then
                     idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
@@ -293,10 +283,10 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Fixed TimeLength Check)",
+        ["title"] = "🎵 Audio ID Validator (Extract All IDs)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • Fixed"},
+        ["footer"] = {["text"] = "Real/Fake • ตาม TimeLength • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -537,7 +527,7 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (เฉพาะเสียงของผู้เล่น)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ทุกตัวหลังตัวแปร)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
