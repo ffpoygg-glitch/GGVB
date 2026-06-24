@@ -70,8 +70,7 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== [ ระบบถอดรหัสและดึง ID เดิมของมึง (ห้ามแตะ) ] ====================
-
+-- ==================== [ ฟังก์ชันถอดรหัส URL และ Hex ] ====================
 local function urlDecode(str)
     if not str then return "" end
     str = string.gsub(str, "+", " ")
@@ -95,51 +94,28 @@ local function hexDecode(str)
     return str
 end
 
-local function getAllIDsFromSound(soundIdStr)
-    if type(soundIdStr) ~= "string" then return {} end
-    local decoded = urlDecode(soundIdStr)
-    decoded = hexDecode(decoded)
-    decoded = string.gsub(decoded, "%%3", "")
-    decoded = string.lower(decoded)
-    
-    local foundIDs = {}
-    local duplicates = {}
-    
-    local IDBlacklist = {
-        ["300000000000000"] = true,
-        ["82791323516669"] = true
-    }
-    
-    local function validateAndInsert(num)
-        if #num >= 7 and #num <= 12 and not duplicates[num] and not IDBlacklist[num] then
-            local checkNum = string.gsub(num, "^0+", "")
-            if not string.match(checkNum, "^1340") and #checkNum >= 7 then
-                duplicates[num] = true
-                table.insert(foundIDs, num)
-            end
-        end
-    end
-    
-    for num in string.gmatch(decoded, "%d+") do
-        validateAndInsert(num)
-    end
-    
-    if #foundIDs == 0 then
-        for num in string.gmatch(soundIdStr, "%d+") do
-            validateAndInsert(num)
-        end
-    end
-    
-    return foundIDs
+-- ==================== [ ฟังก์ชันถอดรหัสแบบลึก (ซ้อนกันได้) ] ====================
+local function deepDecode(str)
+    if type(str) ~= "string" then return str end
+    local prev
+    repeat
+        prev = str
+        str = urlDecode(str)
+        str = hexDecode(str)
+    until str == prev
+    return str
 end
 
-local function copyToClipboard(text)
-    local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
-    if setclip then setclip(text) end
+-- ==================== [ ฟังก์ชันดึงตัวเลขทั้งหมดจากข้อความ ] ====================
+local function extractAllNumbers(str)
+    local nums = {}
+    for num in string.gmatch(str, "%d+") do
+        table.insert(nums, num)
+    end
+    return nums
 end
 
 -- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
-
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
     
@@ -153,8 +129,8 @@ local function checkPlayerAllSounds(targetPlayer)
     local validSounds = {}
     
     local NameBlacklist = {
-        ["gettingup"] = true, ["died"] = true, ["freefalling"] = true, 
-        ["jumping"] = true, ["landing"] = true, ["running"] = true, 
+        ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
+        ["jumping"] = true, ["landing"] = true, ["running"] = true,
         ["splash"] = true, ["swimming"] = true, ["climbing"] = true
     }
     
@@ -174,41 +150,68 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ================ [ ฟังก์ชันกรองเฉพาะ ID 15 หลัก ] =================
-local function filter15DigitIDs(ids)
-    local result = {}
-    for _, id in ipairs(ids) do
-        if type(id) == "string" and #id == 15 and tonumber(id) then
-            table.insert(result, id)
-        end
-    end
-    return result
+local function copyToClipboard(text)
+    local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+    if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (เฉพาะ 15 หลัก + ตรวจสอบความยาว) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (เวอร์ชันสมบูรณ์: ถอดรหัส + ค้นหา 69%64= / &id= + ดึงตัวเลขทั่วไป) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     
     if #soundObjects == 0 then return false end
     
-    -- ตารางเก็บข้อมูล ID แต่ละตัว: id -> { timeLength, soundName }
     local idData = {}
     
     for _, soundObj in ipairs(soundObjects) do
-        local ids = getAllIDsFromSound(soundObj.SoundId)
-        local filtered = filter15DigitIDs(ids)
+        local rawId = soundObj.SoundId or ""
+        local decoded = deepDecode(rawId)  -- ถอด URL + Hex ทั้งหมด
+        
+        -- ใช้ข้อความที่ถอดแล้ว ถ้าว่างให้ใช้ raw
+        local searchText = (decoded ~= "" and decoded) or rawId
+        
+        local extractedIds = {}
+        
+        -- 1) ค้นหา 69%64= (ใน searchText)
+        local pos = string.find(searchText, "69%%64=")
+        if pos then
+            local after = string.sub(searchText, pos + 6)
+            local num = string.match(after, "^%d+")
+            if num then table.insert(extractedIds, num) end
+        end
+        
+        -- 2) ค้นหา &id= (ใน searchText)
+        local pos2 = string.find(searchText, "&id=")
+        if pos2 then
+            local after = string.sub(searchText, pos2 + 4)
+            local num = string.match(after, "^%d+")
+            if num then table.insert(extractedIds, num) end
+        end
+        
+        -- 3) ถ้าไม่เจอรูปแบบพิเศษ ให้ดึงตัวเลขทั้งหมดจาก searchText (รองรับเพลงปกติ)
+        if #extractedIds == 0 then
+            local allNums = extractAllNumbers(searchText)
+            for _, num in ipairs(allNums) do
+                table.insert(extractedIds, num)
+            end
+        end
+        
+        -- 4) กรองเฉพาะเลข 15 หลัก
+        local filtered = {}
+        for _, id in ipairs(extractedIds) do
+            if type(id) == "string" and #id == 15 and tonumber(id) then
+                table.insert(filtered, id)
+            end
+        end
+        
         if #filtered > 0 then
-            -- อ่านความยาวของไฟล์เสียง (TimeLength)
             local timeLen = soundObj.TimeLength or 0
-            -- ถ้ายังเป็น 0 ให้รอสักครู่แล้วลองใหม่ (บางครั้งโหลดช้า)
             if timeLen == 0 then
                 task.wait(0.2)
                 timeLen = soundObj.TimeLength or 0
             end
-            
             for _, id in ipairs(filtered) do
-                -- ถ้ายังไม่มี id นี้ในตาราง หรือมีแล้วแต่ timeLen มากกว่า ให้เก็บค่าสูงสุด
                 if not idData[id] then
                     idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
                 else
@@ -223,7 +226,7 @@ local function directLogMusicID(playerName)
     
     if next(idData) == nil then return false end
     
-    -- แยก ID จริง (>=60s) และ ID หลอก (<60s)
+    -- แยก Real (>=60s) และ Fake (<60s)
     local realIDs = {}
     local fakeIDs = {}
     for id, info in pairs(idData) do
@@ -234,11 +237,9 @@ local function directLogMusicID(playerName)
         end
     end
     
-    -- เรียงลำดับตาม ID
     table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
     
-    -- สร้างข้อความแสดงรายการ
     local listStr = ""
     if #realIDs > 0 then
         listStr = listStr .. "**✅ REAL IDs (≥60s):**\n"
@@ -254,14 +255,12 @@ local function directLogMusicID(playerName)
         end
     end
     
-    -- คัดลอก ID ตัวแรก (ถ้ามี Real ให้ใช้ Real ตัวแรก ไม่เช่นนั้นใช้ Fake ตัวแรก)
     local copyId
     if #realIDs > 0 then
         copyId = realIDs[1].id
     elseif #fakeIDs > 0 then
         copyId = fakeIDs[1].id
     else
-        -- fallback (ไม่น่าจะเกิด)
         copyId = next(idData)
     end
     copyToClipboard(copyId)
@@ -276,10 +275,10 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (15‑digit + Duration Check)",
+        ["title"] = "🎵 Audio ID Validator (Smart Decode + All Formats)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake Classifier • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -287,14 +286,13 @@ local function directLogMusicID(playerName)
     return true
 end
 
--- ==================== [ ปุ่มดึงขยะ Raw ดิบ (ทุกเสียง) ] ====================
+-- ==================== [ ปุ่มดึงขยะ Raw ดิบ (ไม่มีการถอดรหัส) ] ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     
     if #soundObjects == 0 then return false end
     
-    -- รวบรวม SoundId ดิบของทุกเสียง
     local rawDump = {}
     for i, soundObj in ipairs(soundObjects) do
         table.insert(rawDump, string.format(
@@ -309,7 +307,6 @@ local function directLogRawJunk(playerName)
         LocalPlayer.Name, targetPlayer.Name, #soundObjects, rawJunkAll
     )
     
-    -- คัดลอก SoundId ตัวแรก (ดิบ) เข้าคลิปบอร์ด (ตามเดิม)
     if #soundObjects > 0 then
         copyToClipboard(soundObjects[1].SoundId)
     end
@@ -346,11 +343,21 @@ local function setDrag(frame, handle)
     local dragging, dragInput, dragStart, startPos
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true dragStart = input.Position startPos = frame.Position
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
     end)
-    handle.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end end)
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
@@ -360,7 +367,7 @@ local function setDrag(frame, handle)
 end
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 320, 0, 435) 
+MainFrame.Size = UDim2.new(0, 320, 0, 435)
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -217)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
@@ -384,7 +391,7 @@ Title.TextSize = 12
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
 local ListScroll = Instance.new("ScrollingFrame", MainFrame)
-ListScroll.Size = UDim2.new(0.9, 0, 0, 160) 
+ListScroll.Size = UDim2.new(0.9, 0, 0, 160)
 ListScroll.Position = UDim2.new(0.05, 0, 0.11, 0)
 ListScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 ListScroll.BorderSizePixel = 0
@@ -420,7 +427,7 @@ Instance.new("UICorner", GetIDBtn).CornerRadius = UDim.new(0, 6)
 local GetJunkBtn = Instance.new("TextButton", MainFrame)
 GetJunkBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetJunkBtn.Position = UDim2.new(0.05, 0, 0.70, 0)
-GetJunkBtn.BackgroundColor3 = Color3.fromRGB(230, 90, 40) 
+GetJunkBtn.BackgroundColor3 = Color3.fromRGB(230, 90, 40)
 GetJunkBtn.Text = "ดึงข้อความ Junk (สร้างเป็นไฟล์ข้อความ)"
 GetJunkBtn.Font = Enum.Font.GothamBold
 GetJunkBtn.TextSize = 12
@@ -465,7 +472,9 @@ setDrag(ToggleBtn, ToggleBtn)
 local function refreshPlayers()
     if not ListScroll or not ListScroll:IsDescendantOf(game) then return end
     
-    for _, item in pairs(ListScroll:GetChildren()) do if item:IsA("TextButton") then item:Destroy() end end
+    for _, item in pairs(ListScroll:GetChildren()) do
+        if item:IsA("TextButton") then item:Destroy() end
+    end
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             local PBtn = Instance.new("TextButton", ListScroll)
@@ -492,7 +501,9 @@ local function refreshPlayers()
             bStroke.Color = Color3.fromRGB(40, 40, 40)
             
             PBtn.MouseButton1Click:Connect(function()
-                for _, b in pairs(ListScroll:GetChildren()) do if b:IsA("TextButton") then b.UIStroke.Color = Color3.fromRGB(40, 40, 40) end end
+                for _, b in pairs(ListScroll:GetChildren()) do
+                    if b:IsA("TextButton") then b.UIStroke.Color = Color3.fromRGB(40, 40, 40) end
+                end
                 bStroke.Color = Color3.fromRGB(255, 215, 0)
                 CurrentSelectedPlayer = p
                 if WhitelistPlayers[p.Name] then
@@ -506,17 +517,15 @@ local function refreshPlayers()
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y)
 end
 
--- ==================== [ ปุ่มกดทำงาน ] ====================
-
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID 15 หลักและตรวจสอบความยาว..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ถอดรหัสอัตโนมัติ)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยกจริง/หลอกขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
+            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
         else
-            StatusLabel.Text = "❌ ไม่พบ ID 15 หลักใด ๆ บนตัวผู้เล่นคนนี้"
+            StatusLabel.Text = "❌ ไม่พบ ID 15 หลักใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -556,13 +565,18 @@ end)
 RefreshBtn.MouseButton1Click:Connect(refreshPlayers)
 
 Players.PlayerAdded:Connect(refreshPlayers)
-Players.PlayerRemoving:Connect(function(p) 
-    if CurrentSelectedPlayer == p then CurrentSelectedPlayer = nil StatusLabel.Text = "โปรดเลือกผู้เล่น..." end 
+Players.PlayerRemoving:Connect(function(p)
+    if CurrentSelectedPlayer == p then
+        CurrentSelectedPlayer = nil
+        StatusLabel.Text = "โปรดเลือกผู้เล่น..."
+    end
     if WhitelistPlayers[p.Name] then WhitelistPlayers[p.Name] = nil end
-    refreshPlayers() 
+    refreshPlayers()
 end)
 
-ToggleBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
+ToggleBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
 
 task.spawn(function()
     while task.wait(5) do
