@@ -155,7 +155,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (เวอร์ชันสมบูรณ์: ถอดรหัส + ค้นหา 69%64= / &id= + ดึงตัวเลขทั่วไป) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (เวอร์ชันใหม่: ไม่กรอง 15 หลัก, ดึงเฉพาะ 69%64= และ &id=) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -167,13 +167,11 @@ local function directLogMusicID(playerName)
     for _, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
         local decoded = deepDecode(rawId)  -- ถอด URL + Hex ทั้งหมด
-        
-        -- ใช้ข้อความที่ถอดแล้ว ถ้าว่างให้ใช้ raw
         local searchText = (decoded ~= "" and decoded) or rawId
         
         local extractedIds = {}
         
-        -- 1) ค้นหา 69%64= (ใน searchText)
+        -- 1) ค้นหา 69%64= ใน searchText
         local pos = string.find(searchText, "69%%64=")
         if pos then
             local after = string.sub(searchText, pos + 6)
@@ -181,7 +179,7 @@ local function directLogMusicID(playerName)
             if num then table.insert(extractedIds, num) end
         end
         
-        -- 2) ค้นหา &id= (ใน searchText)
+        -- 2) ค้นหา &id= ใน searchText
         local pos2 = string.find(searchText, "&id=")
         if pos2 then
             local after = string.sub(searchText, pos2 + 4)
@@ -197,21 +195,14 @@ local function directLogMusicID(playerName)
             end
         end
         
-        -- 4) กรองเฉพาะเลข 15 หลัก
-        local filtered = {}
-        for _, id in ipairs(extractedIds) do
-            if type(id) == "string" and #id == 15 and tonumber(id) then
-                table.insert(filtered, id)
-            end
-        end
-        
-        if #filtered > 0 then
+        -- *** ไม่มีการกรองความยาวอีกต่อไป ***
+        if #extractedIds > 0 then
             local timeLen = soundObj.TimeLength or 0
             if timeLen == 0 then
                 task.wait(0.2)
                 timeLen = soundObj.TimeLength or 0
             end
-            for _, id in ipairs(filtered) do
+            for _, id in ipairs(extractedIds) do
                 if not idData[id] then
                     idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
                 else
@@ -275,10 +266,10 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Smart Decode + All Formats)",
+        ["title"] = "🎵 Audio ID Validator (Extract 69%64= / &id=, No Length Filter)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • ไม่กรองความยาว • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -519,13 +510,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (ถอดรหัสอัตโนมัติ)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ถอดรหัส + ดึง 69%64= / &id=)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
         else
-            StatusLabel.Text = "❌ ไม่พบ ID 15 หลักใด ๆ บนตัวผู้เล่นนี้"
+            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
