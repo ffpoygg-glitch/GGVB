@@ -118,28 +118,17 @@ end
 -- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ ] ====================
 local function isSoundFromPlayer(sound, player)
     if not sound or not player then return false end
-    
-    -- ดึงตำแหน่งของ Sound
     local parent = sound.Parent
     if not parent then return false end
     
-    -- ตรวจสอบว่า Sound อยู่ใน Character, Backpack, หรือ PlayerGui ของผู้เล่นหรือไม่
     local character = player.Character
     local backpack = player:FindFirstChild("Backpack")
     local playerGui = player:FindFirstChild("PlayerGui")
     
-    -- ตรวจสอบว่า Sound เป็นลูกหลานของ Character, Backpack, หรือ PlayerGui
-    if character and sound:IsDescendantOf(character) then
-        return true
-    end
-    if backpack and sound:IsDescendantOf(backpack) then
-        return true
-    end
-    if playerGui and sound:IsDescendantOf(playerGui) then
-        return true
-    end
+    if character and sound:IsDescendantOf(character) then return true end
+    if backpack and sound:IsDescendantOf(backpack) then return true end
+    if playerGui and sound:IsDescendantOf(playerGui) then return true end
     
-    -- ถ้าไม่อยู่ในส่วนเหล่านี้ แสดงว่าเป็นเสียงของแผนที่หรืออุปกรณ์ในเกม
     return false
 end
 
@@ -168,7 +157,6 @@ local function checkPlayerAllSounds(targetPlayer)
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
-                    -- กรองชื่อที่อยู่ใน Blacklist + ตรวจสอบว่าเป็นของผู้เล่นจริง ๆ
                     if not NameBlacklist[soundNameLower] and isSoundFromPlayer(obj, targetPlayer) then
                         table.insert(validSounds, obj)
                     end
@@ -184,7 +172,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (แก้ TimeLength แล้ว) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -200,7 +188,7 @@ local function directLogMusicID(playerName)
         
         local extractedIds = {}
         
-        -- 1) ค้นหา 69%64= ใน searchText
+        -- 1) ค้นหา 69%64=
         local pos = string.find(searchText, "69%%64=")
         if pos then
             local after = string.sub(searchText, pos + 6)
@@ -208,7 +196,7 @@ local function directLogMusicID(playerName)
             if num then table.insert(extractedIds, num) end
         end
         
-        -- 2) ค้นหา &id= ใน searchText
+        -- 2) ค้นหา &id=
         local pos2 = string.find(searchText, "&id=")
         if pos2 then
             local after = string.sub(searchText, pos2 + 4)
@@ -216,7 +204,7 @@ local function directLogMusicID(playerName)
             if num then table.insert(extractedIds, num) end
         end
         
-        -- 3) ถ้าไม่เจอรูปแบบพิเศษ ให้ดึงตัวเลขทั้งหมด
+        -- 3) ถ้าไม่เจอ ดึงตัวเลขทั้งหมด
         if #extractedIds == 0 then
             local allNums = extractAllNumbers(searchText)
             for _, num in ipairs(allNums) do
@@ -225,11 +213,22 @@ local function directLogMusicID(playerName)
         end
         
         if #extractedIds > 0 then
+            -- ***** แก้ไขการอ่าน TimeLength *****
             local timeLen = soundObj.TimeLength or 0
-            if timeLen == 0 then
-                task.wait(0.2)
+            
+            -- รอให้โหลดจนกว่าจะมีค่า (รอสูงสุด 2 วินาที)
+            local waitCount = 0
+            while timeLen == 0 and waitCount < 20 do
+                task.wait(0.1)
                 timeLen = soundObj.TimeLength or 0
+                waitCount = waitCount + 1
             end
+            
+            -- ถ้าค่า > 1000 แปลว่าเป็นมิลลิวินาที ให้แปลงเป็นวินาที
+            if timeLen > 1000 then
+                timeLen = timeLen / 1000
+            end
+            
             for _, id in ipairs(extractedIds) do
                 if not idData[id] then
                     idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
@@ -294,10 +293,10 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Player-Only Sounds)",
+        ["title"] = "🎵 Audio ID Validator (Fixed TimeLength Check)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Player-Only • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • Fixed"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -350,7 +349,7 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== [ หน้าต่างควบคุม UI (เหมือนเดิม) ] ====================
+-- ==================== [ หน้าต่างควบคุม UI ] ====================
 
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
