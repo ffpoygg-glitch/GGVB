@@ -115,7 +115,35 @@ local function extractAllNumbers(str)
     return nums
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
+-- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ ] ====================
+local function isSoundFromPlayer(sound, player)
+    if not sound or not player then return false end
+    
+    -- ดึงตำแหน่งของ Sound
+    local parent = sound.Parent
+    if not parent then return false end
+    
+    -- ตรวจสอบว่า Sound อยู่ใน Character, Backpack, หรือ PlayerGui ของผู้เล่นหรือไม่
+    local character = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    local playerGui = player:FindFirstChild("PlayerGui")
+    
+    -- ตรวจสอบว่า Sound เป็นลูกหลานของ Character, Backpack, หรือ PlayerGui
+    if character and sound:IsDescendantOf(character) then
+        return true
+    end
+    if backpack and sound:IsDescendantOf(backpack) then
+        return true
+    end
+    if playerGui and sound:IsDescendantOf(playerGui) then
+        return true
+    end
+    
+    -- ถ้าไม่อยู่ในส่วนเหล่านี้ แสดงว่าเป็นเสียงของแผนที่หรืออุปกรณ์ในเกม
+    return false
+end
+
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น (กรองเฉพาะของผู้เล่น) ] ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
     
@@ -140,7 +168,8 @@ local function checkPlayerAllSounds(targetPlayer)
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
-                    if not NameBlacklist[soundNameLower] then
+                    -- กรองชื่อที่อยู่ใน Blacklist + ตรวจสอบว่าเป็นของผู้เล่นจริง ๆ
+                    if not NameBlacklist[soundNameLower] and isSoundFromPlayer(obj, targetPlayer) then
                         table.insert(validSounds, obj)
                     end
                 end
@@ -155,7 +184,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (เวอร์ชันใหม่: ไม่กรอง 15 หลัก, ดึงเฉพาะ 69%64= และ &id=) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -166,7 +195,7 @@ local function directLogMusicID(playerName)
     
     for _, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
-        local decoded = deepDecode(rawId)  -- ถอด URL + Hex ทั้งหมด
+        local decoded = deepDecode(rawId)
         local searchText = (decoded ~= "" and decoded) or rawId
         
         local extractedIds = {}
@@ -187,7 +216,7 @@ local function directLogMusicID(playerName)
             if num then table.insert(extractedIds, num) end
         end
         
-        -- 3) ถ้าไม่เจอรูปแบบพิเศษ ให้ดึงตัวเลขทั้งหมดจาก searchText (รองรับเพลงปกติ)
+        -- 3) ถ้าไม่เจอรูปแบบพิเศษ ให้ดึงตัวเลขทั้งหมด
         if #extractedIds == 0 then
             local allNums = extractAllNumbers(searchText)
             for _, num in ipairs(allNums) do
@@ -195,7 +224,6 @@ local function directLogMusicID(playerName)
             end
         end
         
-        -- *** ไม่มีการกรองความยาวอีกต่อไป ***
         if #extractedIds > 0 then
             local timeLen = soundObj.TimeLength or 0
             if timeLen == 0 then
@@ -266,10 +294,10 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Extract 69%64= / &id=, No Length Filter)",
+        ["title"] = "🎵 Audio ID Validator (Player-Only Sounds)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Auto‑Decode • ไม่กรองความยาว • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • Player-Only • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -277,7 +305,7 @@ local function directLogMusicID(playerName)
     return true
 end
 
--- ==================== [ ปุ่มดึงขยะ Raw ดิบ (ไม่มีการถอดรหัส) ] ====================
+-- ==================== [ ปุ่มดึงขยะ Raw ดิบ ] ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -398,7 +426,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (คัดกรองอัตโนมัติที่หลังบ้าน)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (เฉพาะเสียงของผู้เล่น)"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -510,13 +538,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (ถอดรหัส + ดึง 69%64= / &id=)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (เฉพาะเสียงของผู้เล่น)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
         else
-            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้"
+            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้ (หรือเป็นเสียงแผนที่)"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -525,13 +553,13 @@ end)
 
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "📦 กำลังดึงข้อมูลขยะดิบ (ทุกเสียง)..."
+        StatusLabel.Text = "📦 กำลังดึงข้อมูลขยะดิบ (เฉพาะเสียงของผู้เล่น)..."
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่งไฟล์ขยะดิบทั้งหมดเรียบร้อย"
         else
-            StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
+            StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้ (หรือเป็นเสียงแผนที่)"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
