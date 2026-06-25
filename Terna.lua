@@ -106,14 +106,16 @@ local function deepDecode(str)
     return str
 end
 
--- ==================== [ ฟังก์ชันดึง ID หลัง 69%64= และ &id= ทั้งหมด ] ====================
+-- ==================== [ ฟังก์ชันดึง ID หลัง 69%64= และ &id= ทั้งหมด (ไม่กรองความยาว) ] ====================
 local function extractIDsFromPattern(text)
     local ids = {}
+    -- ค้นหา 69%64=... จนถึง & หรือ end
     for pattern in string.gmatch(text, "69%%64=([^&]*)") do
         for num in string.gmatch(pattern, "%d+") do
             table.insert(ids, num)
         end
     end
+    -- ค้นหา &id=... จนถึง & หรือ end
     for pattern in string.gmatch(text, "&id=([^&]*)") do
         for num in string.gmatch(pattern, "%d+") do
             table.insert(ids, num)
@@ -137,7 +139,7 @@ local function isSoundFromPlayer(sound, player)
     return false
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น (กรองอุปกรณ์ในแผนที่) ] ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
     
@@ -150,14 +152,12 @@ local function checkPlayerAllSounds(targetPlayer)
     
     local validSounds = {}
     
-    -- Blacklist ชื่อเสียงพื้นฐาน
     local NameBlacklist = {
         ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
         ["jumping"] = true, ["landing"] = true, ["running"] = true,
         ["splash"] = true, ["swimming"] = true, ["climbing"] = true
     }
     
-    -- Blacklist ชื่ออุปกรณ์ในแผนที่ (สเก็ตบอร์ด รถ ฯลฯ)
     local DeviceKeywords = {"skateboard", "car", "vehicle", "bike", "scooter", "bicycle", "motorcycle"}
     
     for _, folder in ipairs(scanTargets) do
@@ -167,10 +167,8 @@ local function checkPlayerAllSounds(targetPlayer)
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
                     
-                    -- เช็ค blacklist พื้นฐาน
                     if NameBlacklist[soundNameLower] then continue end
                     
-                    -- เช็คคำที่เป็นอุปกรณ์
                     local isDevice = false
                     for _, keyword in ipairs(DeviceKeywords) do
                         if string.find(soundNameLower, keyword) then
@@ -180,7 +178,6 @@ local function checkPlayerAllSounds(targetPlayer)
                     end
                     if isDevice then continue end
                     
-                    -- เช็คว่าเป็นของผู้เล่นจริง ๆ
                     if isSoundFromPlayer(obj, targetPlayer) then
                         table.insert(validSounds, obj)
                     end
@@ -196,30 +193,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันตรวจสอบ Asset จาก Roblox API ] ====================
-local function getAssetName(assetId)
-    local httpRequest = getHttpRequest()
-    if not httpRequest then return nil end
-    
-    local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
-    local success, response = pcall(function()
-        return httpRequest({
-            Url = url,
-            Method = "GET",
-            Headers = {["Content-Type"] = "application/json"}
-        })
-    end)
-    
-    if success and response and response.StatusCode == 200 and response.Body then
-        local data = HttpService:JSONDecode(response.Body)
-        if data and data.Name then
-            return data.Name
-        end
-    end
-    return nil
-end
-
--- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (ไม่กรองความยาว, ไม่ตรวจ Asset) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -233,8 +207,10 @@ local function directLogMusicID(playerName)
         local decoded = deepDecode(rawId)
         local searchText = (decoded ~= "" and decoded) or rawId
         
+        -- ดึง ID ทุกตัวจาก pattern
         local extractedIds = extractIDsFromPattern(searchText)
         
+        -- ถ้าไม่เจอ pattern ให้ดึงตัวเลขทั้งหมด (เผื่อกรณี)
         if #extractedIds == 0 then
             for num in string.gmatch(searchText, "%d+") do
                 table.insert(extractedIds, num)
@@ -253,6 +229,7 @@ local function directLogMusicID(playerName)
                 timeLen = timeLen / 1000
             end
             
+            -- เก็บทุก ID (ไม่กรอง)
             for _, id in ipairs(extractedIds) do
                 if not idData[id] then
                     idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
@@ -268,56 +245,40 @@ local function directLogMusicID(playerName)
     
     if next(idData) == nil then return false end
     
-    -- แยกตาม TimeLength ก่อน
-    local realCandidates = {}
+    -- แยกตาม TimeLength
+    local realIDs = {}
     local fakeIDs = {}
-    
     for id, info in pairs(idData) do
         if info.timeLength >= 60 then
-            table.insert(realCandidates, {id = id, len = info.timeLength, name = info.soundName})
+            table.insert(realIDs, {id = id, len = info.timeLength, name = info.soundName})
         else
             table.insert(fakeIDs, {id = id, len = info.timeLength})
         end
     end
     
-    -- ตรวจสอบ Asset สำหรับ Real Candidates
-    local verifiedReal = {}
-    local unverifiedFake = {}
-    
-    for _, item in ipairs(realCandidates) do
-        local assetName = getAssetName(item.id)
-        if assetName then
-            table.insert(verifiedReal, {id = item.id, len = item.len, assetName = assetName})
-        else
-            table.insert(unverifiedFake, {id = item.id, len = item.len})
-        end
-    end
-    
-    for _, item in ipairs(unverifiedFake) do
-        table.insert(fakeIDs, item)
-    end
-    
-    table.sort(verifiedReal, function(a,b) return a.id < b.id end)
+    table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
     
+    -- สร้างข้อความแสดงผล
     local listStr = ""
-    if #verifiedReal > 0 then
-        listStr = listStr .. "**✅ REAL IDs (Verified):**\n"
-        for i, item in ipairs(verifiedReal) do
-            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – **%s**\n", i, item.id, item.len, item.assetName)
+    if #realIDs > 0 then
+        listStr = listStr .. "**✅ REAL IDs (≥60s):**\n"
+        for i, item in ipairs(realIDs) do
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
         end
     end
     if #fakeIDs > 0 then
-        if #verifiedReal > 0 then listStr = listStr .. "\n" end
-        listStr = listStr .. "**❌ FAKE IDs (<60s หรือ Asset ไม่มี):**\n"
+        if #realIDs > 0 then listStr = listStr .. "\n" end
+        listStr = listStr .. "**❌ FAKE IDs (<60s):**\n"
         for i, item in ipairs(fakeIDs) do
             listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
         end
     end
     
+    -- คัดลอก Real ทั้งหมด (หรือ Fake ตัวแรก)
     local copyText = ""
-    if #verifiedReal > 0 then
-        for i, item in ipairs(verifiedReal) do
+    if #realIDs > 0 then
+        for i, item in ipairs(realIDs) do
             if i > 1 then copyText = copyText .. " " end
             copyText = copyText .. item.id
         end
@@ -333,15 +294,15 @@ local function directLogMusicID(playerName)
         "**Target Player:** `@%s`\n\n" ..
         "**📊 สรุป:** `%d Real IDs` , `%d Fake IDs`\n\n" ..
         "%s\n" ..
-        "*คัดลอก ID จริงทั้งหมด (Verified) ไปคลิปบอร์ดแล้ว*",
-        LocalPlayer.Name, targetPlayer.Name, #verifiedReal, #fakeIDs, listStr
+        "*คัดลอก ID จริงทั้งหมด (ตาม TimeLength) ไปคลิปบอร์ดแล้ว*",
+        LocalPlayer.Name, targetPlayer.Name, #realIDs, #fakeIDs, listStr
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Player-Only Sounds)",
+        ["title"] = "🎵 Audio ID Validator (Extract All IDs, No Length Filter)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Verified Asset • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • ตาม TimeLength • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -582,7 +543,7 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (เฉพาะเสียงของผู้เล่น)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ทุกตัวหลังตัวแปร)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
