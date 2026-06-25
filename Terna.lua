@@ -122,48 +122,17 @@ local function extractIDsFromPattern(text)
     return ids
 end
 
--- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นจริง ๆ หรือไม่ (เข้มงวด) ] ====================
+-- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ (แบบง่าย) ] ====================
 local function isSoundFromPlayer(sound, player)
     if not sound or not player then return false end
-    local parent = sound.Parent
-    if not parent then return false end
     
     local character = player.Character
     local backpack = player:FindFirstChild("Backpack")
     local playerGui = player:FindFirstChild("PlayerGui")
     
-    -- ถ้าอยู่ใน Backpack หรือ PlayerGui = เป็นของผู้เล่นแน่นอน
+    if character and sound:IsDescendantOf(character) then return true end
     if backpack and sound:IsDescendantOf(backpack) then return true end
     if playerGui and sound:IsDescendantOf(playerGui) then return true end
-    
-    -- ถ้าอยู่ใน Character ต้องตรวจสอบให้ละเอียด
-    if character and sound:IsDescendantOf(character) then
-        -- ดึงชื่อของ Sound
-        local soundName = sound.Name:lower()
-        
-        -- กรองชื่อเสียงที่เป็นอุปกรณ์หรือของในแผนที่
-        local deviceKeywords = {"skateboard", "car", "vehicle", "bike", "scooter", "bicycle", "motorcycle", "boat", "plane", "helicopter", "train"}
-        for _, keyword in ipairs(deviceKeywords) do
-            if string.find(soundName, keyword) then
-                return false
-            end
-        end
-        
-        -- ตรวจสอบว่า Sound อยู่ในส่วนของร่างกายหรือไม่ (Humanoid, Torso, Head, Arms, Legs)
-        local bodyParts = {"Humanoid", "Torso", "Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-        local currentParent = sound.Parent
-        while currentParent and currentParent ~= character do
-            for _, part in ipairs(bodyParts) do
-                if currentParent.Name == part then
-                    return true
-                end
-            end
-            currentParent = currentParent.Parent
-        end
-        
-        -- ถ้า Sound อยู่ใน Character แต่ไม่ใช่ส่วนของร่างกาย → ข้าม (น่าจะเป็นอุปกรณ์)
-        return false
-    end
     
     return false
 end
@@ -181,11 +150,15 @@ local function checkPlayerAllSounds(targetPlayer)
     
     local validSounds = {}
     
+    -- Blacklist ชื่อเสียงพื้นฐาน
     local NameBlacklist = {
         ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
         ["jumping"] = true, ["landing"] = true, ["running"] = true,
         ["splash"] = true, ["swimming"] = true, ["climbing"] = true
     }
+    
+    -- Blacklist ชื่ออุปกรณ์ในแผนที่ (สเก็ตบอร์ด รถ ฯลฯ)
+    local DeviceKeywords = {"skateboard", "car", "vehicle", "bike", "scooter", "bicycle", "motorcycle"}
     
     for _, folder in ipairs(scanTargets) do
         local success, descendants = pcall(function() return folder:GetDescendants() end)
@@ -193,7 +166,22 @@ local function checkPlayerAllSounds(targetPlayer)
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
-                    if not NameBlacklist[soundNameLower] and isSoundFromPlayer(obj, targetPlayer) then
+                    
+                    -- เช็ค blacklist พื้นฐาน
+                    if NameBlacklist[soundNameLower] then continue end
+                    
+                    -- เช็คคำที่เป็นอุปกรณ์
+                    local isDevice = false
+                    for _, keyword in ipairs(DeviceKeywords) do
+                        if string.find(soundNameLower, keyword) then
+                            isDevice = true
+                            break
+                        end
+                    end
+                    if isDevice then continue end
+                    
+                    -- เช็คว่าเป็นของผู้เล่นจริง ๆ
+                    if isSoundFromPlayer(obj, targetPlayer) then
                         table.insert(validSounds, obj)
                     end
                 end
