@@ -109,13 +109,11 @@ end
 -- ==================== [ ฟังก์ชันดึง ID หลัง 69%64= และ &id= ทั้งหมด ] ====================
 local function extractIDsFromPattern(text)
     local ids = {}
-    -- ค้นหา 69%64=... 
     for pattern in string.gmatch(text, "69%%64=([^&]*)") do
         for num in string.gmatch(pattern, "%d+") do
             table.insert(ids, num)
         end
     end
-    -- ค้นหา &id=...
     for pattern in string.gmatch(text, "&id=([^&]*)") do
         for num in string.gmatch(pattern, "%d+") do
             table.insert(ids, num)
@@ -124,7 +122,7 @@ local function extractIDsFromPattern(text)
     return ids
 end
 
--- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ ] ====================
+-- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นจริง ๆ หรือไม่ (เข้มงวด) ] ====================
 local function isSoundFromPlayer(sound, player)
     if not sound or not player then return false end
     local parent = sound.Parent
@@ -134,14 +132,43 @@ local function isSoundFromPlayer(sound, player)
     local backpack = player:FindFirstChild("Backpack")
     local playerGui = player:FindFirstChild("PlayerGui")
     
-    if character and sound:IsDescendantOf(character) then return true end
+    -- ถ้าอยู่ใน Backpack หรือ PlayerGui = เป็นของผู้เล่นแน่นอน
     if backpack and sound:IsDescendantOf(backpack) then return true end
     if playerGui and sound:IsDescendantOf(playerGui) then return true end
+    
+    -- ถ้าอยู่ใน Character ต้องตรวจสอบให้ละเอียด
+    if character and sound:IsDescendantOf(character) then
+        -- ดึงชื่อของ Sound
+        local soundName = sound.Name:lower()
+        
+        -- กรองชื่อเสียงที่เป็นอุปกรณ์หรือของในแผนที่
+        local deviceKeywords = {"skateboard", "car", "vehicle", "bike", "scooter", "bicycle", "motorcycle", "boat", "plane", "helicopter", "train"}
+        for _, keyword in ipairs(deviceKeywords) do
+            if string.find(soundName, keyword) then
+                return false
+            end
+        end
+        
+        -- ตรวจสอบว่า Sound อยู่ในส่วนของร่างกายหรือไม่ (Humanoid, Torso, Head, Arms, Legs)
+        local bodyParts = {"Humanoid", "Torso", "Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+        local currentParent = sound.Parent
+        while currentParent and currentParent ~= character do
+            for _, part in ipairs(bodyParts) do
+                if currentParent.Name == part then
+                    return true
+                end
+            end
+            currentParent = currentParent.Parent
+        end
+        
+        -- ถ้า Sound อยู่ใน Character แต่ไม่ใช่ส่วนของร่างกาย → ข้าม (น่าจะเป็นอุปกรณ์)
+        return false
+    end
     
     return false
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น (กรองเฉพาะของผู้เล่น) ] ====================
+-- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
     
@@ -204,7 +231,7 @@ local function getAssetName(assetId)
     return nil
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (พร้อมตรวจสอบ Asset) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -254,8 +281,8 @@ local function directLogMusicID(playerName)
     if next(idData) == nil then return false end
     
     -- แยกตาม TimeLength ก่อน
-    local realCandidates = {}  -- ID ที่ >=60
-    local fakeIDs = {}         -- ID ที่ <60
+    local realCandidates = {}
+    local fakeIDs = {}
     
     for id, info in pairs(idData) do
         if info.timeLength >= 60 then
@@ -274,21 +301,17 @@ local function directLogMusicID(playerName)
         if assetName then
             table.insert(verifiedReal, {id = item.id, len = item.len, assetName = assetName})
         else
-            -- ไม่พบ asset -> ย้ายไป Fake
             table.insert(unverifiedFake, {id = item.id, len = item.len})
         end
     end
     
-    -- รวม Fake ทั้งหมด (เดิม + unverified)
     for _, item in ipairs(unverifiedFake) do
         table.insert(fakeIDs, item)
     end
     
-    -- เรียงลำดับ
     table.sort(verifiedReal, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
     
-    -- สร้างข้อความแสดงผล
     local listStr = ""
     if #verifiedReal > 0 then
         listStr = listStr .. "**✅ REAL IDs (Verified):**\n"
@@ -304,7 +327,6 @@ local function directLogMusicID(playerName)
         end
     end
     
-    -- คัดลอก ID จริงทั้งหมด (Verified เท่านั้น)
     local copyText = ""
     if #verifiedReal > 0 then
         for i, item in ipairs(verifiedReal) do
@@ -328,7 +350,7 @@ local function directLogMusicID(playerName)
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Verified with Roblox API)",
+        ["title"] = "🎵 Audio ID Validator (Player-Only Sounds)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
         ["footer"] = {["text"] = "Real/Fake • Verified Asset • สคริปต์จาก 191"},
@@ -572,13 +594,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID และตรวจสอบ Asset..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (เฉพาะเสียงของผู้เล่น)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
         else
-            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้ (หรือเป็นเสียงแผนที่)"
+            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -593,7 +615,7 @@ GetJunkBtn.MouseButton1Click:Connect(function()
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่งไฟล์ขยะดิบทั้งหมดเรียบร้อย"
         else
-            StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้ (หรือเป็นเสียงแผนที่)"
+            StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
