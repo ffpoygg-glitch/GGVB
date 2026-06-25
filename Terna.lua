@@ -181,7 +181,7 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (ปรับปรุง: ดึง ID หลังตัวแปรทุกตัว + แยกตาม TimeLength) ] ====================
+-- ==================== [ ปุ่มดึงแบบเจาะ (คัดลอก ID จริงทั้งหมด) ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -263,30 +263,36 @@ local function directLogMusicID(playerName)
         end
     end
     
-    local copyId
+    -- ***** แก้ไขตรงนี้: คัดลอก ID จริงทั้งหมด *****
+    local copyText = ""
     if #realIDs > 0 then
-        copyId = realIDs[1].id
+        -- ถ้ามี ID จริง ให้คัดลอกทุกตัว (คั่นด้วยช่องว่าง)
+        for i, item in ipairs(realIDs) do
+            if i > 1 then copyText = copyText .. " " end
+            copyText = copyText .. item.id
+        end
     elseif #fakeIDs > 0 then
-        copyId = fakeIDs[1].id
+        -- ถ้าไม่มี ID จริง ให้คัดลอก ID หลอกตัวแรก (แบบเดิม)
+        copyText = fakeIDs[1].id
     else
-        copyId = next(idData)
+        copyText = next(idData)
     end
-    copyToClipboard(copyId)
+    copyToClipboard(copyText)
     
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n\n" ..
         "**📊 สรุป:** `%d Real IDs` , `%d Fake IDs`\n\n" ..
         "%s\n" ..
-        "*คัดลอก ID แรก (จัดลำดับ Real ก่อน) ไปคลิปบอร์ดแล้ว*",
+        "*คัดลอก ID จริงทั้งหมด (คั่นด้วยช่องว่าง) ไปคลิปบอร์ดแล้ว*",
         LocalPlayer.Name, targetPlayer.Name, #realIDs, #fakeIDs, listStr
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Extract All IDs)",
+        ["title"] = "🎵 Audio ID Validator (Copy All Real IDs)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • ตาม TimeLength • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • คัดลอก ID จริงทั้งหมด • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -531,7 +537,7 @@ GetIDBtn.MouseButton1Click:Connect(function()
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงตัวแรก)"
+            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
         else
             StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้ (หรือเป็นเสียงแผนที่)"
         end
