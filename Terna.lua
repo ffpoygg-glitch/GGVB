@@ -15,7 +15,7 @@ local WhitelistPlayers = {}
 
 -- ==================== [ ระบบกรอง ID ที่ต้องการบล็อค (ไม่ให้ดึง) ] ====================
 local BlockedIDs = {
-    -- ID เดิมที่บล็อกไว้
+    -- ID เดิมทั้งหมด (22 ตัวแรก + 7 ตัว + 19 ตัว + 16 ตัว)
     ["00106800577264015"] = true,
     ["00109462618039650"] = true,
     ["00112583972042063"] = true,
@@ -45,8 +45,6 @@ local BlockedIDs = {
     ["78899"] = true,
     ["83260119948695"] = true,
     ["9"] = true,
-
-    -- ***** เพิ่ม ID ใหม่ 19 ตัวตามที่เพื่อนสั่ง *****
     ["00120104871360327"] = true,
     ["00129060362076134"] = true,
     ["101631982347841"] = true,
@@ -65,7 +63,23 @@ local BlockedIDs = {
     ["76500780055460"] = true,
     ["78515442941510"] = true,
     ["90533928572341"] = true,
-    ["99721399503975"] = true
+    ["99721399503975"] = true,
+    ["00101020203030404"] = true,
+    ["00112233445566778"] = true,
+    ["00123456789012345"] = true,
+    ["00135791357913579"] = true,
+    ["00159260374815926"] = true,
+    ["00246802468024680"] = true,
+    ["00405060708090001"] = true,
+    ["00543210987654321"] = true,
+    ["00731959731959731"] = true,
+    ["00864208642086420"] = true,
+    ["00887766554433221"] = true,
+    ["00975319753197531"] = true,
+    ["00987654321098765"] = true,
+    ["00998877665544332"] = true,
+    ["129569049476734"] = true,
+    ["81067084464165"] = true
 }
 
 -- ==================== [ ฟังก์ชันหาฟังก์ชัน Request ที่ปลอดภัยที่สุด ] ====================
@@ -161,17 +175,26 @@ local function deepDecode(str)
     return str
 end
 
--- ==================== [ ฟังก์ชันดึง ID หลัง 69%64= และ &id= ทั้งหมด ] ====================
+-- ==================== [ ฟังก์ชันดึง ID หลังตัวแปรต่าง ๆ (รองรับหลายรูปแบบ) ] ====================
 local function extractIDsFromPattern(text)
     local ids = {}
-    for pattern in string.gmatch(text, "69%%64=([^&]*)") do
-        for num in string.gmatch(pattern, "%d+") do
-            table.insert(ids, num)
-        end
-    end
-    for pattern in string.gmatch(text, "&id=([^&]*)") do
-        for num in string.gmatch(pattern, "%d+") do
-            table.insert(ids, num)
+    -- รูปแบบตัวแปรที่ใช้กัน (เพิ่ม &%69%64= และ %69%64= ด้วย)
+    local patterns = {
+        "69%%64=([^&]*)",
+        "&id=([^&]*)",
+        "id=([^&]*)",
+        "audio=([^&]*)",
+        "song=([^&]*)",
+        "music=([^&]*)",
+        -- ***** เพิ่มรูปแบบใหม่สำหรับ &%69%64= และ %69%64= *****
+        "%%69%%64=([^&]*)",
+        "&%%69%%64=([^&]*)"
+    }
+    for _, pat in ipairs(patterns) do
+        for capture in string.gmatch(text, pat) do
+            for num in string.gmatch(capture, "%d+") do
+                table.insert(ids, num)
+            end
         end
     end
     return ids
@@ -290,7 +313,6 @@ local function directLogMusicID(playerName)
             end
             
             for _, id in ipairs(extractedIds) do
-                -- ***** กรอง ID ที่อยู่ใน BlockedIDs *****
                 if not BlockedIDs[id] then
                     local apiDuration = getAudioDuration(id)
                     local finalTimeLen = apiDuration or fallbackTimeLen
@@ -310,7 +332,6 @@ local function directLogMusicID(playerName)
     
     if next(idData) == nil then return false end
     
-    -- แยกตาม TimeLength
     local realIDs = {}
     local fakeIDs = {}
     for id, info in pairs(idData) do
