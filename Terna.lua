@@ -13,10 +13,32 @@ local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ
 -- ตารางจัดเก็บรายชื่อ Whitelist (ไวริส)
 local WhitelistPlayers = {}
 
--- ==================== [ ระบบกรอง ID ที่ต้องการยกเว้น (ไม่ให้ดึง) ] ====================
+-- ==================== [ ระบบกรอง ID ที่ต้องการบล็อค (ไม่ให้ดึง) ] ====================
 local BlockedIDs = {
+    ["00106800577264015"] = true,
+    ["00109462618039650"] = true,
+    ["00112583972042063"] = true,
+    ["00113841533670628"] = true,
+    ["00116872955970254"] = true,
+    ["00117424747387525"] = true,
+    ["00117628371363749"] = true,
+    ["00121320825772761"] = true,
+    ["00125329595131078"] = true,
+    ["00129043827992035"] = true,
+    ["00134076916421685"] = true,
+    ["00134523838494464"] = true,
+    ["00137058099826867"] = true,
+    ["00138763959207625"] = true,
+    ["0070567654933546"] = true,
+    ["0079688020178596"] = true,
+    ["0083260119948695"] = true,
+    ["0083681471562121"] = true,
+    ["0083848201981900"] = true,
+    ["0090308298517537"] = true,
+    ["0093338918256962"] = true,
+    ["0093932829347443"] = true,
     ["115897193508594"] = true,
-    ["123728962822472"] = true
+    ["123728962822472"] = true,
 }
 
 -- ==================== [ ฟังก์ชันหาฟังก์ชัน Request ที่ปลอดภัยที่สุด ] ====================
@@ -183,7 +205,30 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ (กรอง ID ที่กำหนดออก) ] ====================
+-- ==================== [ ฟังก์ชันตรวจสอบ Duration ของ ID จาก Roblox API ] ====================
+local function getAudioDuration(assetId)
+    local httpRequest = getHttpRequest()
+    if not httpRequest then return nil end
+    
+    local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
+    local success, response = pcall(function()
+        return httpRequest({
+            Url = url,
+            Method = "GET",
+            Headers = {["Content-Type"] = "application/json"}
+        })
+    end)
+    
+    if success and response and response.StatusCode == 200 and response.Body then
+        local data = HttpService:JSONDecode(response.Body)
+        if data and data.Duration then
+            return data.Duration
+        end
+    end
+    return nil
+end
+
+-- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -206,25 +251,28 @@ local function directLogMusicID(playerName)
         end
         
         if #extractedIds > 0 then
-            local timeLen = soundObj.TimeLength or 0
+            local fallbackTimeLen = soundObj.TimeLength or 0
             local waitCount = 0
-            while timeLen == 0 and waitCount < 20 do
+            while fallbackTimeLen == 0 and waitCount < 20 do
                 task.wait(0.1)
-                timeLen = soundObj.TimeLength or 0
+                fallbackTimeLen = soundObj.TimeLength or 0
                 waitCount = waitCount + 1
             end
-            if timeLen > 1000 then
-                timeLen = timeLen / 1000
+            if fallbackTimeLen > 1000 then
+                fallbackTimeLen = fallbackTimeLen / 1000
             end
             
             for _, id in ipairs(extractedIds) do
-                -- ***** กรองเฉพาะ ID ที่อยู่ใน Blacklist ออก *****
+                -- ***** กรอง ID ที่อยู่ใน BlockedIDs *****
                 if not BlockedIDs[id] then
+                    local apiDuration = getAudioDuration(id)
+                    local finalTimeLen = apiDuration or fallbackTimeLen
+                    
                     if not idData[id] then
-                        idData[id] = { timeLength = timeLen, soundName = soundObj.Name }
+                        idData[id] = { timeLength = finalTimeLen, soundName = soundObj.Name }
                     else
-                        if timeLen > idData[id].timeLength then
-                            idData[id].timeLength = timeLen
+                        if finalTimeLen > idData[id].timeLength then
+                            idData[id].timeLength = finalTimeLen
                             idData[id].soundName = soundObj.Name
                         end
                     end
@@ -282,15 +330,15 @@ local function directLogMusicID(playerName)
         "**Target Player:** `@%s`\n\n" ..
         "**📊 สรุป:** `%d Real IDs` , `%d Fake IDs`\n\n" ..
         "%s\n" ..
-        "*คัดลอก ID จริงทั้งหมด (ตาม TimeLength) ไปคลิปบอร์ดแล้ว*",
+        "*คัดลอก ID จริงทั้งหมด (ตาม Duration จริงจาก Roblox API) ไปคลิปบอร์ดแล้ว*",
         LocalPlayer.Name, targetPlayer.Name, #realIDs, #fakeIDs, listStr
     )
     
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Blocked IDs Excluded)",
+        ["title"] = "🎵 Audio ID Validator (Real Duration from API)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • กรอง ID ที่กำหนดออก • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • Duration จาก Roblox API • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
     
@@ -419,7 +467,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (กรอง ID ที่กำหนดออก)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (ตรวจสอบเวลาจริงจาก Roblox API)"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -531,13 +579,13 @@ end
 
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (กรอง ID ที่กำหนดออก)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ตรวจสอบเวลาจริงจาก API)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "✅ สำเร็จ! ส่งเฉพาะ ID ที่เหลือขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
+            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
         else
-            StatusLabel.Text = "❌ ไม่พบ ID อื่น ๆ บนตัวผู้เล่นนี้ (หรือถูกกรองหมด)"
+            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
