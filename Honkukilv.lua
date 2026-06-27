@@ -1,6 +1,7 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
 -- พร้อมระบบล็อกอิน: รหัส HONKUKI_191Legendary
+-- แก้ไขให้เรียก API แบบขนาน (เร็วขึ้นมาก)
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -257,34 +258,40 @@ local function copyToClipboard(text)
     if setclip then setclip(text) end
 end
 
--- ==================== ตรวจสอบ Duration จาก Roblox API ====================
-local function getAudioDuration(assetId)
+-- ==================== ตรวจสอบ Duration จาก Roblox API (แบบ async) ====================
+local function getAudioDurationAsync(assetId, callback)
     local httpRequest = getHttpRequest()
-    if not httpRequest then return nil end
-    local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
-    local success, response = pcall(function()
-        return httpRequest({
-            Url = url,
-            Method = "GET",
-            Headers = {["Content-Type"] = "application/json"}
-        })
-    end)
-    if success and response and response.StatusCode == 200 and response.Body then
-        local data = HttpService:JSONDecode(response.Body)
-        if data and data.Duration then
-            return data.Duration
-        end
+    if not httpRequest then
+        callback(nil)
+        return
     end
-    return nil
+    local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
+    task.spawn(function()
+        local success, response = pcall(function()
+            return httpRequest({
+                Url = url,
+                Method = "GET",
+                Headers = {["Content-Type"] = "application/json"}
+            })
+        end)
+        if success and response and response.StatusCode == 200 and response.Body then
+            local data = HttpService:JSONDecode(response.Body)
+            if data and data.Duration then
+                callback(data.Duration)
+                return
+            end
+        end
+        callback(nil)
+    end)
 end
 
--- ==================== ฟังก์ชันหลักปุ่มเจาะ ====================
+-- ==================== ฟังก์ชันหลักปุ่มเจาะ (แบบขนาน) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
-    local idData = {}
+    local rawIds = {}  -- เก็บ ID ที่เจอทั้งหมด (รวมซ้ำ)
     local totalFound = 0
     local totalBlocked = 0
 
@@ -306,26 +313,53 @@ local function directLogMusicID(playerName)
                 if BlockedIDs[id] then
                     totalBlocked = totalBlocked + 1
                 else
-                    local apiDuration = getAudioDuration(id)
-                    if apiDuration then
-                        if not idData[id] then
-                            idData[id] = { timeLength = apiDuration, soundName = soundObj.Name }
-                        else
-                            if apiDuration > idData[id].timeLength then
-                                idData[id].timeLength = apiDuration
-                                idData[id].soundName = soundObj.Name
-                            end
-                        end
-                    end
+                    table.insert(rawIds, id)
                 end
             end
         end
     end
 
-    if next(idData) == nil then
+    if #rawIds == 0 then
         local msg = "ไม่พบ ID ที่ไม่ถูกบล็อค (ถูกบล็อคทั้งหมด " .. totalBlocked .. " ตัว)"
         StatusLabel.Text = msg
         return false
+    end
+
+    -- ใช้ตารางเก็บผลลัพธ์แบบไม่ซ้ำ
+    local idData = {}
+    local pendingCount = 0
+    local completedCount = 0
+    local maxAttempts = 15  -- ป้องกันค้าง
+
+    -- เรียก API แบบขนาน
+    for _, id in ipairs(rawIds) do
+        if not idData[id] then
+            idData[id] = { timeLength = nil, soundName = soundObjects[1].Name }  -- ใส่ค่าเริ่มต้น
+            pendingCount = pendingCount + 1
+            getAudioDurationAsync(id, function(duration)
+                if duration then
+                    idData[id].timeLength = duration
+                else
+                    -- ถ้า API ไม่ตอบ ให้ใช้ค่า 0 (จะถูกจัดเป็น Fake)
+                    idData[id].timeLength = 0
+                end
+                completedCount = completedCount + 1
+            end)
+        end
+    end
+
+    -- รอให้ทุกตัวเสร็จ (หรือ timeout)
+    local waitCount = 0
+    while completedCount < pendingCount and waitCount < maxAttempts do
+        task.wait(0.1)
+        waitCount = waitCount + 1
+    end
+
+    -- ถ้ายังค้างอยู่ ให้ถือว่าตัวที่เหลือเป็น 0
+    for id, info in pairs(idData) do
+        if info.timeLength == nil then
+            info.timeLength = 0
+        end
     end
 
     -- แยก Real / Fake
@@ -333,7 +367,7 @@ local function directLogMusicID(playerName)
     local fakeIDs = {}
     for id, info in pairs(idData) do
         if info.timeLength >= 60 then
-            table.insert(realIDs, {id = id, len = info.timeLength, name = info.soundName})
+            table.insert(realIDs, {id = id, len = info.timeLength})
         else
             table.insert(fakeIDs, {id = id, len = info.timeLength})
         end
@@ -480,7 +514,7 @@ local function setDrag(frame, handle)
 end
 
 -- =====================================================
--- หน้าต่างล็อกอิน (แสดงก่อน)
+-- หน้าต่างล็อกอิน
 -- =====================================================
 local LoginFrame = Instance.new("Frame", ScreenGui)
 LoginFrame.Size = UDim2.new(0, 320, 0, 180)
@@ -495,7 +529,6 @@ lStroke.Color = Color3.fromRGB(255, 215, 0)
 lStroke.Thickness = 2
 lStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
--- หัวข้อ
 local LoginTitle = Instance.new("TextLabel", LoginFrame)
 LoginTitle.Size = UDim2.new(1, 0, 0, 40)
 LoginTitle.Position = UDim2.new(0, 0, 0, 5)
@@ -507,7 +540,6 @@ LoginTitle.TextSize = 16
 LoginTitle.TextXAlignment = Enum.TextXAlignment.Center
 LoginTitle.ZIndex = 11
 
--- คำอธิบาย
 local LoginSub = Instance.new("TextLabel", LoginFrame)
 LoginSub.Size = UDim2.new(1, 0, 0, 20)
 LoginSub.Position = UDim2.new(0, 0, 0, 45)
@@ -519,7 +551,6 @@ LoginSub.TextSize = 12
 LoginSub.TextXAlignment = Enum.TextXAlignment.Center
 LoginSub.ZIndex = 11
 
--- ช่อง TextBox
 local PasswordBox = Instance.new("TextBox", LoginFrame)
 PasswordBox.Size = UDim2.new(0.8, 0, 0, 35)
 PasswordBox.Position = UDim2.new(0.1, 0, 0.4, 0)
@@ -534,7 +565,6 @@ PasswordBox.ClearTextOnFocus = false
 PasswordBox.ZIndex = 11
 Instance.new("UICorner", PasswordBox).CornerRadius = UDim.new(0, 6)
 
--- ปุ่ม Login
 local LoginButton = Instance.new("TextButton", LoginFrame)
 LoginButton.Size = UDim2.new(0.5, 0, 0, 35)
 LoginButton.Position = UDim2.new(0.25, 0, 0.65, 0)
@@ -546,7 +576,6 @@ LoginButton.TextSize = 14
 LoginButton.ZIndex = 11
 Instance.new("UICorner", LoginButton).CornerRadius = UDim.new(0, 6)
 
--- ข้อความ Error
 local LoginError = Instance.new("TextLabel", LoginFrame)
 LoginError.Size = UDim2.new(1, 0, 0, 20)
 LoginError.Position = UDim2.new(0, 0, 0.85, 0)
@@ -559,7 +588,7 @@ LoginError.TextXAlignment = Enum.TextXAlignment.Center
 LoginError.ZIndex = 11
 
 -- =====================================================
--- UI หลัก (ซ่อนไว้จนกว่าล็อกอินผ่าน)
+-- UI หลัก
 -- =====================================================
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 320, 0, 435)
@@ -573,7 +602,6 @@ local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.Color = Color3.fromRGB(60, 60, 60)
 mStroke.Thickness = 1
 
--- TopBar
 local TopBar = Instance.new("Frame", MainFrame)
 TopBar.Size = UDim2.new(1, 0, 0, 35)
 TopBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -590,7 +618,6 @@ Title.Font = Enum.Font.GothamBold
 Title.TextSize = 12
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- ListScroll
 local ListScroll = Instance.new("ScrollingFrame", MainFrame)
 ListScroll.Size = UDim2.new(0.9, 0, 0, 160)
 ListScroll.Position = UDim2.new(0.05, 0, 0.11, 0)
@@ -603,7 +630,6 @@ Instance.new("UICorner", ListScroll).CornerRadius = UDim.new(0, 5)
 local Layout = Instance.new("UIListLayout", ListScroll)
 Layout.Padding = UDim.new(0, 4)
 
--- StatusLabel
 local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
@@ -616,7 +642,6 @@ StatusLabel.TextSize = 11
 StatusLabel.TextWrapped = true
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 5)
 
--- ปุ่มต่างๆ
 local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.60, 0)
@@ -657,7 +682,6 @@ RefreshBtn.TextSize = 11
 RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 6)
 
--- Toggle Button
 local ToggleBtn = Instance.new("TextButton", ScreenGui)
 ToggleBtn.Size = UDim2.new(0, 45, 0, 45)
 ToggleBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
@@ -751,7 +775,7 @@ end
 -- =====================================================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (ตรวจสอบเวลาจริงจาก API)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (เรียก API แบบขนาน)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
