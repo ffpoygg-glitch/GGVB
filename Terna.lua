@@ -1,6 +1,12 @@
+-- =====================================================
+-- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
+-- พร้อมระบบล็อกอิน: รหัส HONKUKI_191Legendary
+-- =====================================================
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
@@ -10,12 +16,12 @@ local CurrentSelectedPlayer = nil
 -- ลิงก์ Webhook ของมึง
 local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
 
--- ตารางจัดเก็บรายชื่อ Whitelist (ไวริส)
+-- ตาราง Whitelist (ไวริส)
 local WhitelistPlayers = {}
 
--- ==================== [ ระบบกรอง ID ที่ต้องการบล็อค (ไม่ให้ดึง) ] ====================
+-- ==================== บล็อค ID ปลอมทั้งหมด ====================
 local BlockedIDs = {
-    -- ID เดิมทั้งหมด (22 ตัวแรก + 7 ตัว + 19 ตัว + 16 ตัว)
+    -- ชุดแรก 22 ตัว
     ["00106800577264015"] = true,
     ["00109462618039650"] = true,
     ["00112583972042063"] = true,
@@ -38,6 +44,7 @@ local BlockedIDs = {
     ["0090308298517537"] = true,
     ["0093338918256962"] = true,
     ["0093932829347443"] = true,
+    -- สั้น ๆ
     ["00"] = true,
     ["4"] = true,
     ["62"] = true,
@@ -45,6 +52,7 @@ local BlockedIDs = {
     ["78899"] = true,
     ["83260119948695"] = true,
     ["9"] = true,
+    -- ชุดที่สอง 19 ตัว
     ["00120104871360327"] = true,
     ["00129060362076134"] = true,
     ["101631982347841"] = true,
@@ -64,6 +72,7 @@ local BlockedIDs = {
     ["78515442941510"] = true,
     ["90533928572341"] = true,
     ["99721399503975"] = true,
+    -- ชุดที่สาม 16 ตัว
     ["00101020203030404"] = true,
     ["00112233445566778"] = true,
     ["00123456789012345"] = true,
@@ -79,11 +88,10 @@ local BlockedIDs = {
     ["00987654321098765"] = true,
     ["00998877665544332"] = true,
     ["129569049476734"] = true,
-    ["81067084464165"] = true,
-    ["000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true,
+    ["81067084464165"] = true
 }
 
--- ==================== [ ฟังก์ชันหาฟังก์ชัน Request ที่ปลอดภัยที่สุด ] ====================
+-- ==================== ฟังก์ชัน Request ====================
 local function getHttpRequest()
     if request then return request end
     if http_request then return http_request end
@@ -92,13 +100,13 @@ local function getHttpRequest()
     return nil
 end
 
--- ==================== [ ฟังก์ชันสุ่มแถบสีรุ้งข้างกรอบ Embed ] ====================
+-- ==================== ฟังก์ชันสุ่มสีรุ้ง ====================
 local function getRandomRainbowColor()
     local colors = {16711680, 16744192, 16776960, 65280, 65535, 255, 16711935}
     return colors[math.random(1, #colors)]
 end
 
--- ==================== [ ฟังก์ชันส่งข้อมูลเข้า Discord Webhook ] ====================
+-- ==================== ส่ง Embed ====================
 local function sendToDiscordEmbed(embedData)
     local httpRequest = getHttpRequest()
     if httpRequest then
@@ -113,13 +121,13 @@ local function sendToDiscordEmbed(embedData)
     end
 end
 
+-- ==================== ส่งไฟล์ ====================
 local function sendToDiscordFile(fileName, fileContent, embedData)
     local httpRequest = getHttpRequest()
     if httpRequest then
         pcall(function()
             local boundary = "----WebKitFormBoundaryHonkukiSpy"
             local jsonPayload = HttpService:JSONEncode({["embeds"] = {embedData}})
-            
             local body = "--" .. boundary .. "\r\n" ..
                          "Content-Disposition: form-data; name=\"payload_json\"\r\n" ..
                          "Content-Type: application/json\r\n\r\n" ..
@@ -129,7 +137,6 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
                          "Content-Type: text/plain\r\n\r\n" ..
                          fileContent .. "\r\n" ..
                          "--" .. boundary .. "--\r\n"
-                         
             httpRequest({
                 Url = WebhookURL,
                 Method = "POST",
@@ -140,13 +147,14 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== [ ฟังก์ชันถอดรหัส URL และ Hex ] ====================
+-- ==================== ถอดรหัส URL ====================
 local function urlDecode(str)
     if not str then return "" end
     str = string.gsub(str, "+", " ")
     return (string.gsub(str, "%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
 end
 
+-- ==================== ถอดรหัส Hex ====================
 local function hexDecode(str)
     if not str then return "" end
     str = string.gsub(str, "0x", "")
@@ -164,7 +172,7 @@ local function hexDecode(str)
     return str
 end
 
--- ==================== [ ฟังก์ชันถอดรหัสแบบลึก (ซ้อนกันได้) ] ====================
+-- ==================== ถอดรหัสลึก (ซ้อนกันไม่จำกัด) ====================
 local function deepDecode(str)
     if type(str) ~= "string" then return str end
     local prev
@@ -176,10 +184,9 @@ local function deepDecode(str)
     return str
 end
 
--- ==================== [ ฟังก์ชันดึง ID หลังตัวแปรต่าง ๆ (รองรับหลายรูปแบบ) ] ====================
+-- ==================== ดึง ID จากตัวแปรทุกแบบ ====================
 local function extractIDsFromPattern(text)
     local ids = {}
-    -- รูปแบบตัวแปรที่ใช้กัน (เพิ่ม &%69%64= และ %69%64= ด้วย)
     local patterns = {
         "69%%64=([^&]*)",
         "&id=([^&]*)",
@@ -187,7 +194,6 @@ local function extractIDsFromPattern(text)
         "audio=([^&]*)",
         "song=([^&]*)",
         "music=([^&]*)",
-        -- ***** เพิ่มรูปแบบใหม่สำหรับ &%69%64= และ %69%64= *****
         "%%69%%64=([^&]*)",
         "&%%69%%64=([^&]*)"
     }
@@ -201,40 +207,35 @@ local function extractIDsFromPattern(text)
     return ids
 end
 
--- ==================== [ ฟังก์ชันเช็คว่า Sound นี้เป็นของผู้เล่นหรือไม่ (แบบง่าย) ] ====================
+-- ==================== เช็คว่า Sound เป็นของผู้เล่น ====================
 local function isSoundFromPlayer(sound, player)
     if not sound or not player then return false end
-    
     local character = player.Character
     local backpack = player:FindFirstChild("Backpack")
     local playerGui = player:FindFirstChild("PlayerGui")
-    
     if character and sound:IsDescendantOf(character) then return true end
     if backpack and sound:IsDescendantOf(backpack) then return true end
     if playerGui and sound:IsDescendantOf(playerGui) then return true end
-    
     return false
 end
 
--- ==================== [ ฟังก์ชันเช็ควัตถุเสียงเพลงบนตัวผู้เล่น ] ====================
+-- ==================== สแกนเสียงจากตัวผู้เล่น ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
-    
     local scanTargets = {}
     if targetPlayer.Character then table.insert(scanTargets, targetPlayer.Character) end
     local backpack = targetPlayer:FindFirstChild("Backpack")
     if backpack then table.insert(scanTargets, backpack) end
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
-    
+
     local validSounds = {}
-    
     local NameBlacklist = {
         ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
         ["jumping"] = true, ["landing"] = true, ["running"] = true,
         ["splash"] = true, ["swimming"] = true, ["climbing"] = true
     }
-    
+
     for _, folder in ipairs(scanTargets) do
         local success, descendants = pcall(function() return folder:GetDescendants() end)
         if success and descendants then
@@ -251,16 +252,16 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
+-- ==================== คัดลอกข้อความ ====================
 local function copyToClipboard(text)
     local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
     if setclip then setclip(text) end
 end
 
--- ==================== [ ฟังก์ชันตรวจสอบ Duration ของ ID จาก Roblox API ] ====================
+-- ==================== ตรวจสอบ Duration จาก Roblox API ====================
 local function getAudioDuration(assetId)
     local httpRequest = getHttpRequest()
     if not httpRequest then return nil end
-    
     local url = "https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(assetId)
     local success, response = pcall(function()
         return httpRequest({
@@ -269,7 +270,6 @@ local function getAudioDuration(assetId)
             Headers = {["Content-Type"] = "application/json"}
         })
     end)
-    
     if success and response and response.StatusCode == 200 and response.Body then
         local data = HttpService:JSONDecode(response.Body)
         if data and data.Duration then
@@ -279,60 +279,57 @@ local function getAudioDuration(assetId)
     return nil
 end
 
--- ==================== [ ปุ่มดึงแบบเจาะ ] ====================
+-- ==================== ฟังก์ชันหลักปุ่มเจาะ ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
-    
     if #soundObjects == 0 then return false end
-    
+
     local idData = {}
-    
+    local totalFound = 0
+    local totalBlocked = 0
+
     for _, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
         local decoded = deepDecode(rawId)
         local searchText = (decoded ~= "" and decoded) or rawId
-        
+
         local extractedIds = extractIDsFromPattern(searchText)
-        
         if #extractedIds == 0 then
             for num in string.gmatch(searchText, "%d+") do
                 table.insert(extractedIds, num)
             end
         end
-        
+
         if #extractedIds > 0 then
-            local fallbackTimeLen = soundObj.TimeLength or 0
-            local waitCount = 0
-            while fallbackTimeLen == 0 and waitCount < 20 do
-                task.wait(0.1)
-                fallbackTimeLen = soundObj.TimeLength or 0
-                waitCount = waitCount + 1
-            end
-            if fallbackTimeLen > 1000 then
-                fallbackTimeLen = fallbackTimeLen / 1000
-            end
-            
             for _, id in ipairs(extractedIds) do
-                if not BlockedIDs[id] then
+                totalFound = totalFound + 1
+                if BlockedIDs[id] then
+                    totalBlocked = totalBlocked + 1
+                else
                     local apiDuration = getAudioDuration(id)
-                    local finalTimeLen = apiDuration or fallbackTimeLen
-                    
-                    if not idData[id] then
-                        idData[id] = { timeLength = finalTimeLen, soundName = soundObj.Name }
-                    else
-                        if finalTimeLen > idData[id].timeLength then
-                            idData[id].timeLength = finalTimeLen
-                            idData[id].soundName = soundObj.Name
+                    if apiDuration then
+                        if not idData[id] then
+                            idData[id] = { timeLength = apiDuration, soundName = soundObj.Name }
+                        else
+                            if apiDuration > idData[id].timeLength then
+                                idData[id].timeLength = apiDuration
+                                idData[id].soundName = soundObj.Name
+                            end
                         end
                     end
                 end
             end
         end
     end
-    
-    if next(idData) == nil then return false end
-    
+
+    if next(idData) == nil then
+        local msg = "ไม่พบ ID ที่ไม่ถูกบล็อค (ถูกบล็อคทั้งหมด " .. totalBlocked .. " ตัว)"
+        StatusLabel.Text = msg
+        return false
+    end
+
+    -- แยก Real / Fake
     local realIDs = {}
     local fakeIDs = {}
     for id, info in pairs(idData) do
@@ -342,10 +339,10 @@ local function directLogMusicID(playerName)
             table.insert(fakeIDs, {id = id, len = info.timeLength})
         end
     end
-    
+
     table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
-    
+
     local listStr = ""
     if #realIDs > 0 then
         listStr = listStr .. "**✅ REAL IDs (≥60s):**\n"
@@ -360,7 +357,8 @@ local function directLogMusicID(playerName)
             listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
         end
     end
-    
+
+    -- คัดลอก Real IDs ทั้งหมด (ถ้ามี) หรือ Fake ตัวแรก
     local copyText = ""
     if #realIDs > 0 then
         for i, item in ipairs(realIDs) do
@@ -373,16 +371,21 @@ local function directLogMusicID(playerName)
         copyText = next(idData)
     end
     copyToClipboard(copyText)
-    
+
+    local summary = string.format(
+        "**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
+        totalFound, totalBlocked, #realIDs, #fakeIDs
+    )
+
     local longDescription = string.format(
         "**Spy Executor:** `@%s`\n" ..
         "**Target Player:** `@%s`\n\n" ..
-        "**📊 สรุป:** `%d Real IDs` , `%d Fake IDs`\n\n" ..
+        "**📊 สรุป:** %s\n\n" ..
         "%s\n" ..
-        "*คัดลอก ID จริงทั้งหมด (ตาม Duration จริงจาก Roblox API) ไปคลิปบอร์ดแล้ว*",
-        LocalPlayer.Name, targetPlayer.Name, #realIDs, #fakeIDs, listStr
+        "*คัดลอก ID จริงทั้งหมด (ถ้ามี) หรือ ID แรกไปคลิปบอร์ดแล้ว*",
+        LocalPlayer.Name, targetPlayer.Name, summary, listStr
     )
-    
+
     local embed = {
         ["title"] = "🎵 Audio ID Validator (Real Duration from API)",
         ["description"] = longDescription,
@@ -390,18 +393,17 @@ local function directLogMusicID(playerName)
         ["footer"] = {["text"] = "Real/Fake • Duration จาก Roblox API • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
-    
+
     sendToDiscordEmbed(embed)
     return true
 end
 
--- ==================== [ ปุ่มดึงขยะ Raw ดิบ ] ====================
+-- ==================== ปุ่มดึงขยะ ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
-    
     if #soundObjects == 0 then return false end
-    
+
     local rawDump = {}
     for i, soundObj in ipairs(soundObjects) do
         table.insert(rawDump, string.format(
@@ -409,17 +411,16 @@ local function directLogRawJunk(playerName)
             i, soundObj.Name, soundObj.SoundId
         ))
     end
-    
     local rawJunkAll = table.concat(rawDump, "\n")
     local fullDump = string.format(
         "=== RAW JUNK DUMP (ALL SOUNDS) ===\nRun By: @%s\nTarget: @%s\nTotal Sounds: %d\n=======================================\n\n%s",
         LocalPlayer.Name, targetPlayer.Name, #soundObjects, rawJunkAll
     )
-    
+
     if #soundObjects > 0 then
         copyToClipboard(soundObjects[1].SoundId)
     end
-    
+
     local txtFileName = "raw_junk_all_" .. targetPlayer.Name .. ".txt"
     local longDescription = string.format(
         "**Junk Collector:** `@%s`\n" ..
@@ -427,7 +428,7 @@ local function directLogRawJunk(playerName)
         "**Dump Status:** `สกัด SoundId ดิบทั้งหมด (%d เสียง) สำเร็จ!`",
         LocalPlayer.Name, targetPlayer.Name, #soundObjects
     )
-    
+
     local embed = {
         ["title"] = "Strict Raw Text Dumped Log (All Sounds)",
         ["description"] = longDescription,
@@ -435,13 +436,12 @@ local function directLogRawJunk(playerName)
         ["footer"] = {["text"] = "Raw All Sounds • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
-    
+
     sendToDiscordFile(txtFileName, fullDump, embed)
     return true
 end
 
--- ==================== [ หน้าต่างควบคุม UI ] ====================
-
+-- ==================== ส่วน UI ====================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui", PlayerGui)
@@ -475,10 +475,79 @@ local function setDrag(frame, handle)
     end)
 end
 
+-- =====================================================
+-- หน้าต่างล็อกอิน (Login Frame)
+-- =====================================================
+local LoginFrame = Instance.new("Frame", ScreenGui)
+LoginFrame.Size = UDim2.new(0, 300, 0, 170)
+LoginFrame.Position = UDim2.new(0.5, -150, 0.5, -85)
+LoginFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+Instance.new("UICorner", LoginFrame).CornerRadius = UDim.new(0, 12)
+local lStroke = Instance.new("UIStroke", LoginFrame)
+lStroke.Color = Color3.fromRGB(255, 215, 0)
+lStroke.Thickness = 2
+
+local LoginTitle = Instance.new("TextLabel", LoginFrame)
+LoginTitle.Size = UDim2.new(1, 0, 0, 40)
+LoginTitle.Position = UDim2.new(0, 0, 0, 0)
+LoginTitle.BackgroundTransparency = 1
+LoginTitle.Text = "🔐 HONKUKI DEEP SCANNER"
+LoginTitle.TextColor3 = Color3.fromRGB(255, 215, 0)
+LoginTitle.Font = Enum.Font.GothamBold
+LoginTitle.TextSize = 16
+LoginTitle.TextXAlignment = Enum.TextXAlignment.Center
+
+local LoginSub = Instance.new("TextLabel", LoginFrame)
+LoginSub.Size = UDim2.new(1, 0, 0, 20)
+LoginSub.Position = UDim2.new(0, 0, 0, 35)
+LoginSub.BackgroundTransparency = 1
+LoginSub.Text = "กรุณาป้อนรหัสผ่านเพื่อเข้าใช้งาน"
+LoginSub.TextColor3 = Color3.fromRGB(200, 200, 200)
+LoginSub.Font = Enum.Font.Gotham
+LoginSub.TextSize = 12
+LoginSub.TextXAlignment = Enum.TextXAlignment.Center
+
+local PasswordBox = Instance.new("TextBox", LoginFrame)
+PasswordBox.Size = UDim2.new(0.8, 0, 0, 32)
+PasswordBox.Position = UDim2.new(0.1, 0, 0.45, 0)
+PasswordBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+PasswordBox.Text = ""
+PasswordBox.PlaceholderText = "ป้อนรหัส..."
+PasswordBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+PasswordBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+PasswordBox.Font = Enum.Font.Gotham
+PasswordBox.TextSize = 14
+PasswordBox.ClearTextOnFocus = false
+Instance.new("UICorner", PasswordBox).CornerRadius = UDim.new(0, 6)
+
+local LoginButton = Instance.new("TextButton", LoginFrame)
+LoginButton.Size = UDim2.new(0.5, 0, 0, 32)
+LoginButton.Position = UDim2.new(0.25, 0, 0.7, 0)
+LoginButton.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+LoginButton.Text = "เข้าสู่ระบบ"
+LoginButton.TextColor3 = Color3.fromRGB(20, 20, 20)
+LoginButton.Font = Enum.Font.GothamBold
+LoginButton.TextSize = 14
+Instance.new("UICorner", LoginButton).CornerRadius = UDim.new(0, 6)
+
+local LoginError = Instance.new("TextLabel", LoginFrame)
+LoginError.Size = UDim2.new(1, 0, 0, 20)
+LoginError.Position = UDim2.new(0, 0, 0.85, 0)
+LoginError.BackgroundTransparency = 1
+LoginError.Text = ""
+LoginError.TextColor3 = Color3.fromRGB(255, 80, 80)
+LoginError.Font = Enum.Font.Gotham
+LoginError.TextSize = 12
+LoginError.TextXAlignment = Enum.TextXAlignment.Center
+
+-- =====================================================
+-- UI หลัก (ซ่อนไว้จนกว่าล็อกอินผ่าน)
+-- =====================================================
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 320, 0, 435)
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -217)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Visible = false
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
 local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.Color = Color3.fromRGB(60, 60, 60)
@@ -570,17 +639,45 @@ ToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 ToggleBtn.Text = "🎵"
 ToggleBtn.TextSize = 20
 ToggleBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+ToggleBtn.Visible = false
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 22)
 local tStroke = Instance.new("UIStroke", ToggleBtn)
 tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
 
--- ==================== [ ฟังก์ชันโหลดอัปเดตรายชื่อในเซิร์ฟ ] ====================
+-- =====================================================
+-- ฟังก์ชันล็อกอิน
+-- =====================================================
+local function tryLogin()
+    local input = PasswordBox.Text
+    if input == "HONKUKI_191Legendary" then
+        LoginFrame.Visible = false
+        MainFrame.Visible = true
+        ToggleBtn.Visible = true
+        LoginError.Text = ""
+        PasswordBox.Text = ""
+        refreshPlayers()
+    else
+        LoginError.Text = "❌ รหัสไม่ถูกต้อง กรุณาลองใหม่"
+        PasswordBox.Text = ""
+        PasswordBox:CaptureFocus()
+    end
+end
 
+LoginButton.MouseButton1Click:Connect(tryLogin)
+
+PasswordBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        tryLogin()
+    end
+end)
+
+-- =====================================================
+-- ฟังก์ชันรีเฟรชผู้เล่น (ใช้งานหลังจากล็อกอิน)
+-- =====================================================
 local function refreshPlayers()
     if not ListScroll or not ListScroll:IsDescendantOf(game) then return end
-    
     for _, item in pairs(ListScroll:GetChildren()) do
         if item:IsA("TextButton") then item:Destroy() end
     end
@@ -589,7 +686,6 @@ local function refreshPlayers()
             local PBtn = Instance.new("TextButton", ListScroll)
             PBtn.Size = UDim2.new(1, -6, 0, 30)
             PBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-            
             local activeSounds = checkPlayerAllSounds(p)
             if WhitelistPlayers[p.Name] then
                 PBtn.Text = "  🛡️ " .. p.DisplayName .. " (@" .. p.Name .. ") [ไวริส]"
@@ -601,14 +697,12 @@ local function refreshPlayers()
                 PBtn.Text = "  " .. p.DisplayName .. " (@" .. p.Name .. ")"
                 PBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
             end
-            
             PBtn.Font = Enum.Font.Gotham
             PBtn.TextSize = 12
             PBtn.TextXAlignment = Enum.TextXAlignment.Left
             Instance.new("UICorner", PBtn).CornerRadius = UDim.new(0, 4)
             local bStroke = Instance.new("UIStroke", PBtn)
             bStroke.Color = Color3.fromRGB(40, 40, 40)
-            
             PBtn.MouseButton1Click:Connect(function()
                 for _, b in pairs(ListScroll:GetChildren()) do
                     if b:IsA("TextButton") then b.UIStroke.Color = Color3.fromRGB(40, 40, 40) end
@@ -626,6 +720,9 @@ local function refreshPlayers()
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y)
 end
 
+-- =====================================================
+-- ปุ่มกดทำงาน (เชื่อมต่อหลังจากล็อกอิน)
+-- =====================================================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
         StatusLabel.Text = "🔍 กำลังเจาะ ID (ตรวจสอบเวลาจริงจาก API)..."
@@ -633,8 +730,6 @@ GetIDBtn.MouseButton1Click:Connect(function()
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
             StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
-        else
-            StatusLabel.Text = "❌ ไม่พบ ID ใด ๆ บนตัวผู้เล่นนี้"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -689,8 +784,17 @@ end)
 
 task.spawn(function()
     while task.wait(5) do
-        refreshPlayers()
+        if MainFrame.Visible then
+            refreshPlayers()
+        end
     end
 end)
 
-refreshPlayers()
+-- ตั้งค่าให้ LoginFrame อยู่ด้านหน้า
+LoginFrame.ZIndex = 10
+MainFrame.ZIndex = 1
+ToggleBtn.ZIndex = 2
+
+-- เริ่มต้นให้โฟกัสที่ TextBox
+task.wait(0.1)
+PasswordBox:CaptureFocus()
