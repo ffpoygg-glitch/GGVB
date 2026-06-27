@@ -7,7 +7,6 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
-
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
@@ -441,12 +440,17 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== ส่วน UI ====================
+-- =====================================================
+-- ส่วน UI (ล็อกอิน + หน้าหลัก)
+-- =====================================================
+
+-- ลบ UI เก่าถ้ามี
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui", PlayerGui)
 ScreenGui.Name = "Honkuki_DeepSoundSpy"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local function setDrag(frame, handle)
     local dragging, dragInput, dragStart, startPos
@@ -476,41 +480,50 @@ local function setDrag(frame, handle)
 end
 
 -- =====================================================
--- หน้าต่างล็อกอิน (Login Frame)
+-- หน้าต่างล็อกอิน (แสดงก่อน)
 -- =====================================================
 local LoginFrame = Instance.new("Frame", ScreenGui)
-LoginFrame.Size = UDim2.new(0, 300, 0, 170)
-LoginFrame.Position = UDim2.new(0.5, -150, 0.5, -85)
-LoginFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+LoginFrame.Size = UDim2.new(0, 320, 0, 180)
+LoginFrame.Position = UDim2.new(0.5, -160, 0.5, -90)
+LoginFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+LoginFrame.BorderSizePixel = 0
+LoginFrame.ZIndex = 10
 Instance.new("UICorner", LoginFrame).CornerRadius = UDim.new(0, 12)
+
 local lStroke = Instance.new("UIStroke", LoginFrame)
 lStroke.Color = Color3.fromRGB(255, 215, 0)
 lStroke.Thickness = 2
+lStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
+-- หัวข้อ
 local LoginTitle = Instance.new("TextLabel", LoginFrame)
 LoginTitle.Size = UDim2.new(1, 0, 0, 40)
-LoginTitle.Position = UDim2.new(0, 0, 0, 0)
+LoginTitle.Position = UDim2.new(0, 0, 0, 5)
 LoginTitle.BackgroundTransparency = 1
 LoginTitle.Text = "🔐 HONKUKI DEEP SCANNER"
 LoginTitle.TextColor3 = Color3.fromRGB(255, 215, 0)
 LoginTitle.Font = Enum.Font.GothamBold
 LoginTitle.TextSize = 16
 LoginTitle.TextXAlignment = Enum.TextXAlignment.Center
+LoginTitle.ZIndex = 11
 
+-- คำอธิบาย
 local LoginSub = Instance.new("TextLabel", LoginFrame)
 LoginSub.Size = UDim2.new(1, 0, 0, 20)
-LoginSub.Position = UDim2.new(0, 0, 0, 35)
+LoginSub.Position = UDim2.new(0, 0, 0, 45)
 LoginSub.BackgroundTransparency = 1
 LoginSub.Text = "กรุณาป้อนรหัสผ่านเพื่อเข้าใช้งาน"
-LoginSub.TextColor3 = Color3.fromRGB(200, 200, 200)
+LoginSub.TextColor3 = Color3.fromRGB(180, 180, 180)
 LoginSub.Font = Enum.Font.Gotham
 LoginSub.TextSize = 12
 LoginSub.TextXAlignment = Enum.TextXAlignment.Center
+LoginSub.ZIndex = 11
 
+-- ช่อง TextBox
 local PasswordBox = Instance.new("TextBox", LoginFrame)
-PasswordBox.Size = UDim2.new(0.8, 0, 0, 32)
-PasswordBox.Position = UDim2.new(0.1, 0, 0.45, 0)
-PasswordBox.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+PasswordBox.Size = UDim2.new(0.8, 0, 0, 35)
+PasswordBox.Position = UDim2.new(0.1, 0, 0.4, 0)
+PasswordBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 PasswordBox.Text = ""
 PasswordBox.PlaceholderText = "ป้อนรหัส..."
 PasswordBox.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -518,18 +531,22 @@ PasswordBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
 PasswordBox.Font = Enum.Font.Gotham
 PasswordBox.TextSize = 14
 PasswordBox.ClearTextOnFocus = false
+PasswordBox.ZIndex = 11
 Instance.new("UICorner", PasswordBox).CornerRadius = UDim.new(0, 6)
 
+-- ปุ่ม Login
 local LoginButton = Instance.new("TextButton", LoginFrame)
-LoginButton.Size = UDim2.new(0.5, 0, 0, 32)
-LoginButton.Position = UDim2.new(0.25, 0, 0.7, 0)
+LoginButton.Size = UDim2.new(0.5, 0, 0, 35)
+LoginButton.Position = UDim2.new(0.25, 0, 0.65, 0)
 LoginButton.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 LoginButton.Text = "เข้าสู่ระบบ"
-LoginButton.TextColor3 = Color3.fromRGB(20, 20, 20)
+LoginButton.TextColor3 = Color3.fromRGB(15, 15, 15)
 LoginButton.Font = Enum.Font.GothamBold
 LoginButton.TextSize = 14
+LoginButton.ZIndex = 11
 Instance.new("UICorner", LoginButton).CornerRadius = UDim.new(0, 6)
 
+-- ข้อความ Error
 local LoginError = Instance.new("TextLabel", LoginFrame)
 LoginError.Size = UDim2.new(1, 0, 0, 20)
 LoginError.Position = UDim2.new(0, 0, 0.85, 0)
@@ -539,6 +556,7 @@ LoginError.TextColor3 = Color3.fromRGB(255, 80, 80)
 LoginError.Font = Enum.Font.Gotham
 LoginError.TextSize = 12
 LoginError.TextXAlignment = Enum.TextXAlignment.Center
+LoginError.ZIndex = 11
 
 -- =====================================================
 -- UI หลัก (ซ่อนไว้จนกว่าล็อกอินผ่าน)
@@ -548,10 +566,14 @@ MainFrame.Size = UDim2.new(0, 320, 0, 435)
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -217)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.Visible = false
+MainFrame.ZIndex = 1
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
 local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.Color = Color3.fromRGB(60, 60, 60)
+mStroke.Thickness = 1
 
+-- TopBar
 local TopBar = Instance.new("Frame", MainFrame)
 TopBar.Size = UDim2.new(1, 0, 0, 35)
 TopBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -568,6 +590,7 @@ Title.Font = Enum.Font.GothamBold
 Title.TextSize = 12
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
+-- ListScroll
 local ListScroll = Instance.new("ScrollingFrame", MainFrame)
 ListScroll.Size = UDim2.new(0.9, 0, 0, 160)
 ListScroll.Position = UDim2.new(0.05, 0, 0.11, 0)
@@ -580,6 +603,7 @@ Instance.new("UICorner", ListScroll).CornerRadius = UDim.new(0, 5)
 local Layout = Instance.new("UIListLayout", ListScroll)
 Layout.Padding = UDim.new(0, 4)
 
+-- StatusLabel
 local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
@@ -592,6 +616,7 @@ StatusLabel.TextSize = 11
 StatusLabel.TextWrapped = true
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 5)
 
+-- ปุ่มต่างๆ
 local GetIDBtn = Instance.new("TextButton", MainFrame)
 GetIDBtn.Size = UDim2.new(0.9, 0, 0, 36)
 GetIDBtn.Position = UDim2.new(0.05, 0, 0.60, 0)
@@ -632,6 +657,7 @@ RefreshBtn.TextSize = 11
 RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 6)
 
+-- Toggle Button
 local ToggleBtn = Instance.new("TextButton", ScreenGui)
 ToggleBtn.Size = UDim2.new(0, 45, 0, 45)
 ToggleBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
@@ -640,6 +666,7 @@ ToggleBtn.Text = "🎵"
 ToggleBtn.TextSize = 20
 ToggleBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
 ToggleBtn.Visible = false
+ToggleBtn.ZIndex = 2
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 22)
 local tStroke = Instance.new("UIStroke", ToggleBtn)
 tStroke.Color = Color3.fromRGB(255, 215, 0)
@@ -666,7 +693,6 @@ local function tryLogin()
 end
 
 LoginButton.MouseButton1Click:Connect(tryLogin)
-
 PasswordBox.FocusLost:Connect(function(enterPressed)
     if enterPressed then
         tryLogin()
@@ -674,7 +700,7 @@ PasswordBox.FocusLost:Connect(function(enterPressed)
 end)
 
 -- =====================================================
--- ฟังก์ชันรีเฟรชผู้เล่น (ใช้งานหลังจากล็อกอิน)
+-- ฟังก์ชันรีเฟรชผู้เล่น
 -- =====================================================
 local function refreshPlayers()
     if not ListScroll or not ListScroll:IsDescendantOf(game) then return end
@@ -721,7 +747,7 @@ local function refreshPlayers()
 end
 
 -- =====================================================
--- ปุ่มกดทำงาน (เชื่อมต่อหลังจากล็อกอิน)
+-- ปุ่มกดทำงาน
 -- =====================================================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
@@ -790,11 +816,6 @@ task.spawn(function()
     end
 end)
 
--- ตั้งค่าให้ LoginFrame อยู่ด้านหน้า
-LoginFrame.ZIndex = 10
-MainFrame.ZIndex = 1
-ToggleBtn.ZIndex = 2
-
--- เริ่มต้นให้โฟกัสที่ TextBox
+-- โฟกัสที่ TextBox
 task.wait(0.1)
 PasswordBox:CaptureFocus()
