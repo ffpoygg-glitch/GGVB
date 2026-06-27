@@ -14,7 +14,7 @@ local PlayerGui = LocalPlayer.PlayerGui
 local CurrentSelectedPlayer = nil
 
 -- ลิงก์ Webhook ของมึง
-local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
+local WebhookURL = "https://discord.com/api/webhooks/1520312240782442536/ZQ5nuEq80B9ZcrH7nDpjvFYIcXVRbhAqjRkF7Szsj2aHDF9Tm1TIJ9VVOVu6Nu91BE9a"
 
 -- ตาราง Whitelist (ไวริส)
 local WhitelistPlayers = {}
