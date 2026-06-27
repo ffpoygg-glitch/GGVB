@@ -1,97 +1,55 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- พร้อมระบบล็อกอิน: รหัส HONKUKI_191Legendary
--- แก้ไขให้เรียก API แบบขนาน (เร็วขึ้นมาก)
+-- แก้ไขระบบแยก Real/Fake ให้แม่นยำขึ้น
+-- ตรวจสอบ AssetTypeId และ Duration จาก Roblox API
 -- =====================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-
--- ลิงก์ Webhook ของมึง
 local WebhookURL = "https://discord.com/api/webhooks/1520312240782442536/ZQ5nuEq80B9ZcrH7nDpjvFYIcXVRbhAqjRkF7Szsj2aHDF9Tm1TIJ9VVOVu6Nu91BE9a"
-
--- ตาราง Whitelist (ไวริส)
 local WhitelistPlayers = {}
 
 -- ==================== บล็อค ID ปลอมทั้งหมด ====================
 local BlockedIDs = {
-    -- ชุดแรก 22 ตัว
-    ["00106800577264015"] = true,
-    ["00109462618039650"] = true,
-    ["00112583972042063"] = true,
-    ["00113841533670628"] = true,
-    ["00116872955970254"] = true,
-    ["00117424747387525"] = true,
-    ["00117628371363749"] = true,
-    ["00121320825772761"] = true,
-    ["00125329595131078"] = true,
-    ["00129043827992035"] = true,
-    ["00134076916421685"] = true,
-    ["00134523838494464"] = true,
-    ["00137058099826867"] = true,
-    ["00138763959207625"] = true,
-    ["0070567654933546"] = true,
-    ["0079688020178596"] = true,
-    ["0083260119948695"] = true,
-    ["0083681471562121"] = true,
-    ["0083848201981900"] = true,
-    ["0090308298517537"] = true,
-    ["0093338918256962"] = true,
-    ["0093932829347443"] = true,
-    -- สั้น ๆ
-    ["00"] = true,
-    ["4"] = true,
-    ["62"] = true,
-    ["7"] = true,
-    ["78899"] = true,
-    ["83260119948695"] = true,
-    ["9"] = true,
-    -- ชุดที่สอง 19 ตัว
-    ["00120104871360327"] = true,
-    ["00129060362076134"] = true,
-    ["101631982347841"] = true,
-    ["112210298860778"] = true,
-    ["115819698454027"] = true,
-    ["116331922770563"] = true,
-    ["117391349741339"] = true,
-    ["117871196330268"] = true,
-    ["120313493879944"] = true,
-    ["134216333534795"] = true,
-    ["137555839480738"] = true,
-    ["140497415402103"] = true,
-    ["54410081542"] = true,
-    ["70999314371231"] = true,
-    ["71352236"] = true,
-    ["76500780055460"] = true,
-    ["78515442941510"] = true,
-    ["90533928572341"] = true,
+    ["00106800577264015"] = true, ["00109462618039650"] = true,
+    ["00112583972042063"] = true, ["00113841533670628"] = true,
+    ["00116872955970254"] = true, ["00117424747387525"] = true,
+    ["00117628371363749"] = true, ["00121320825772761"] = true,
+    ["00125329595131078"] = true, ["00129043827992035"] = true,
+    ["00134076916421685"] = true, ["00134523838494464"] = true,
+    ["00137058099826867"] = true, ["00138763959207625"] = true,
+    ["0070567654933546"] = true, ["0079688020178596"] = true,
+    ["0083260119948695"] = true, ["0083681471562121"] = true,
+    ["0083848201981900"] = true, ["0090308298517537"] = true,
+    ["0093338918256962"] = true, ["0093932829347443"] = true,
+    ["00"] = true, ["4"] = true, ["62"] = true, ["7"] = true,
+    ["78899"] = true, ["83260119948695"] = true, ["9"] = true,
+    ["00120104871360327"] = true, ["00129060362076134"] = true,
+    ["101631982347841"] = true, ["112210298860778"] = true,
+    ["115819698454027"] = true, ["116331922770563"] = true,
+    ["117391349741339"] = true, ["117871196330268"] = true,
+    ["120313493879944"] = true, ["134216333534795"] = true,
+    ["137555839480738"] = true, ["140497415402103"] = true,
+    ["54410081542"] = true, ["70999314371231"] = true,
+    ["71352236"] = true, ["76500780055460"] = true,
+    ["78515442941510"] = true, ["90533928572341"] = true,
     ["99721399503975"] = true,
-    -- ชุดที่สาม 16 ตัว
-    ["00101020203030404"] = true,
-    ["00112233445566778"] = true,
-    ["00123456789012345"] = true,
-    ["00135791357913579"] = true,
-    ["00159260374815926"] = true,
-    ["00246802468024680"] = true,
-    ["00405060708090001"] = true,
-    ["00543210987654321"] = true,
-    ["00731959731959731"] = true,
-    ["00864208642086420"] = true,
-    ["00887766554433221"] = true,
-    ["00975319753197531"] = true,
-    ["00987654321098765"] = true,
-    ["00998877665544332"] = true,
-    ["129569049476734"] = true,
-    ["81067084464165"] = true
+    ["00101020203030404"] = true, ["00112233445566778"] = true,
+    ["00123456789012345"] = true, ["00135791357913579"] = true,
+    ["00159260374815926"] = true, ["00246802468024680"] = true,
+    ["00405060708090001"] = true, ["00543210987654321"] = true,
+    ["00731959731959731"] = true, ["00864208642086420"] = true,
+    ["00887766554433221"] = true, ["00975319753197531"] = true,
+    ["00987654321098765"] = true, ["00998877665544332"] = true,
+    ["129569049476734"] = true, ["81067084464165"] = true
 }
 
--- ==================== ฟังก์ชัน Request ====================
+-- ==================== ฟังก์ชัน Helper ====================
 local function getHttpRequest()
     if request then return request end
     if http_request then return http_request end
@@ -100,13 +58,11 @@ local function getHttpRequest()
     return nil
 end
 
--- ==================== ฟังก์ชันสุ่มสีรุ้ง ====================
 local function getRandomRainbowColor()
     local colors = {16711680, 16744192, 16776960, 65280, 65535, 255, 16711935}
     return colors[math.random(1, #colors)]
 end
 
--- ==================== ส่ง Embed ====================
 local function sendToDiscordEmbed(embedData)
     local httpRequest = getHttpRequest()
     if httpRequest then
@@ -121,7 +77,6 @@ local function sendToDiscordEmbed(embedData)
     end
 end
 
--- ==================== ส่งไฟล์ ====================
 local function sendToDiscordFile(fileName, fileContent, embedData)
     local httpRequest = getHttpRequest()
     if httpRequest then
@@ -147,14 +102,12 @@ local function sendToDiscordFile(fileName, fileContent, embedData)
     end
 end
 
--- ==================== ถอดรหัส URL ====================
 local function urlDecode(str)
     if not str then return "" end
     str = string.gsub(str, "+", " ")
     return (string.gsub(str, "%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
 end
 
--- ==================== ถอดรหัส Hex ====================
 local function hexDecode(str)
     if not str then return "" end
     str = string.gsub(str, "0x", "")
@@ -172,7 +125,6 @@ local function hexDecode(str)
     return str
 end
 
--- ==================== ถอดรหัสลึก (ซ้อนกันไม่จำกัด) ====================
 local function deepDecode(str)
     if type(str) ~= "string" then return str end
     local prev
@@ -184,18 +136,12 @@ local function deepDecode(str)
     return str
 end
 
--- ==================== ดึง ID จากตัวแปรทุกแบบ ====================
 local function extractIDsFromPattern(text)
     local ids = {}
     local patterns = {
-        "69%%64=([^&]*)",
-        "&id=([^&]*)",
-        "id=([^&]*)",
-        "audio=([^&]*)",
-        "song=([^&]*)",
-        "music=([^&]*)",
-        "%%69%%64=([^&]*)",
-        "&%%69%%64=([^&]*)"
+        "69%%64=([^&]*)", "&id=([^&]*)", "id=([^&]*)",
+        "audio=([^&]*)", "song=([^&]*)", "music=([^&]*)",
+        "%%69%%64=([^&]*)", "&%%69%%64=([^&]*)"
     }
     for _, pat in ipairs(patterns) do
         for capture in string.gmatch(text, pat) do
@@ -207,7 +153,6 @@ local function extractIDsFromPattern(text)
     return ids
 end
 
--- ==================== เช็คว่า Sound เป็นของผู้เล่น ====================
 local function isSoundFromPlayer(sound, player)
     if not sound or not player then return false end
     local character = player.Character
@@ -219,7 +164,6 @@ local function isSoundFromPlayer(sound, player)
     return false
 end
 
--- ==================== สแกนเสียงจากตัวผู้เล่น ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
     local scanTargets = {}
@@ -252,14 +196,13 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
--- ==================== คัดลอกข้อความ ====================
 local function copyToClipboard(text)
     local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
     if setclip then setclip(text) end
 end
 
--- ==================== ตรวจสอบ Duration จาก Roblox API (แบบ async) ====================
-local function getAudioDurationAsync(assetId, callback)
+-- ==================== ฟังก์ชันตรวจสอบ Asset (แบบ Async) ====================
+local function getAssetInfoAsync(assetId, callback)
     local httpRequest = getHttpRequest()
     if not httpRequest then
         callback(nil)
@@ -276,8 +219,12 @@ local function getAudioDurationAsync(assetId, callback)
         end)
         if success and response and response.StatusCode == 200 and response.Body then
             local data = HttpService:JSONDecode(response.Body)
-            if data and data.Duration then
-                callback(data.Duration)
+            if data then
+                -- ตรวจสอบว่าเป็น Audio หรือไม่ (AssetTypeId == 3)
+                local assetTypeId = data.AssetTypeId
+                local duration = data.Duration or 0
+                local name = data.Name or ""
+                callback({assetTypeId = assetTypeId, duration = duration, name = name})
                 return
             end
         end
@@ -285,13 +232,13 @@ local function getAudioDurationAsync(assetId, callback)
     end)
 end
 
--- ==================== ฟังก์ชันหลักปุ่มเจาะ (แบบขนาน) ====================
+-- ==================== ฟังก์ชันหลักปุ่มเจาะ (แบบขนาน + เช็ค AssetTypeId) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
-    local rawIds = {}  -- เก็บ ID ที่เจอทั้งหมด (รวมซ้ำ)
+    local rawIds = {}
     local totalFound = 0
     local totalBlocked = 0
 
@@ -325,24 +272,27 @@ local function directLogMusicID(playerName)
         return false
     end
 
-    -- ใช้ตารางเก็บผลลัพธ์แบบไม่ซ้ำ
+    -- เรียก API แบบขนานเพื่อดึงข้อมูล Asset
     local idData = {}
     local pendingCount = 0
     local completedCount = 0
-    local maxAttempts = 15  -- ป้องกันค้าง
+    local maxAttempts = 15
 
-    -- เรียก API แบบขนาน
     for _, id in ipairs(rawIds) do
         if not idData[id] then
-            idData[id] = { timeLength = nil, soundName = soundObjects[1].Name }  -- ใส่ค่าเริ่มต้น
+            idData[id] = { checked = false, duration = 0, assetTypeId = nil, name = "" }
             pendingCount = pendingCount + 1
-            getAudioDurationAsync(id, function(duration)
-                if duration then
-                    idData[id].timeLength = duration
+            getAssetInfoAsync(id, function(info)
+                if info then
+                    idData[id].duration = info.duration
+                    idData[id].assetTypeId = info.assetTypeId
+                    idData[id].name = info.name
                 else
-                    -- ถ้า API ไม่ตอบ ให้ใช้ค่า 0 (จะถูกจัดเป็น Fake)
-                    idData[id].timeLength = 0
+                    -- ถ้า API ไม่ตอบ ให้ถือว่าไม่ใช่ Audio
+                    idData[id].duration = 0
+                    idData[id].assetTypeId = 0
                 end
+                idData[id].checked = true
                 completedCount = completedCount + 1
             end)
         end
@@ -355,21 +305,24 @@ local function directLogMusicID(playerName)
         waitCount = waitCount + 1
     end
 
-    -- ถ้ายังค้างอยู่ ให้ถือว่าตัวที่เหลือเป็น 0
+    -- ถ้ายังค้างอยู่ ให้ถือว่าไม่ใช่ Audio
     for id, info in pairs(idData) do
-        if info.timeLength == nil then
-            info.timeLength = 0
+        if not info.checked then
+            info.duration = 0
+            info.assetTypeId = 0
+            info.name = ""
         end
     end
 
-    -- แยก Real / Fake
+    -- แยก Real / Fake โดยใช้ AssetTypeId และ Duration
     local realIDs = {}
     local fakeIDs = {}
     for id, info in pairs(idData) do
-        if info.timeLength >= 60 then
-            table.insert(realIDs, {id = id, len = info.timeLength})
+        -- เงื่อนไข Real: เป็น Audio (AssetTypeId == 3) และ Duration >= 60
+        if info.assetTypeId == 3 and info.duration >= 60 then
+            table.insert(realIDs, {id = id, len = info.duration, name = info.name})
         else
-            table.insert(fakeIDs, {id = id, len = info.timeLength})
+            table.insert(fakeIDs, {id = id, len = info.duration, typeId = info.assetTypeId})
         end
     end
 
@@ -378,16 +331,17 @@ local function directLogMusicID(playerName)
 
     local listStr = ""
     if #realIDs > 0 then
-        listStr = listStr .. "**✅ REAL IDs (≥60s):**\n"
+        listStr = listStr .. "**✅ REAL IDs (Audio ≥60s):**\n"
         for i, item in ipairs(realIDs) do
-            listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – **%s**\n", i, item.id, item.len, item.name)
         end
     end
     if #fakeIDs > 0 then
         if #realIDs > 0 then listStr = listStr .. "\n" end
-        listStr = listStr .. "**❌ FAKE IDs (<60s):**\n"
+        listStr = listStr .. "**❌ FAKE IDs (ไม่ใช่ Audio หรือ <60s):**\n"
         for i, item in ipairs(fakeIDs) do
-            listStr = listStr .. string.format("%02d. `%s` (%.1f sec)\n", i, item.id, item.len)
+            local typeStr = (item.typeId == 3) and "Audio" or "ประเภท " .. tostring(item.typeId)
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – %s\n", i, item.id, item.len, typeStr)
         end
     end
 
@@ -415,15 +369,15 @@ local function directLogMusicID(playerName)
         "**Target Player:** `@%s`\n\n" ..
         "**📊 สรุป:** %s\n\n" ..
         "%s\n" ..
-        "*คัดลอก ID จริงทั้งหมด (ถ้ามี) หรือ ID แรกไปคลิปบอร์ดแล้ว*",
+        "*คัดลอก ID จริงทั้งหมด (Audio ≥60s) ไปคลิปบอร์ดแล้ว*",
         LocalPlayer.Name, targetPlayer.Name, summary, listStr
     )
 
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (Real Duration from API)",
+        ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • Duration จาก Roblox API • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • ตรวจสอบ AssetTypeId • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
 
@@ -477,8 +431,6 @@ end
 -- =====================================================
 -- ส่วน UI (ล็อกอิน + หน้าหลัก)
 -- =====================================================
-
--- ลบ UI เก่าถ้ามี
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui", PlayerGui)
@@ -513,9 +465,7 @@ local function setDrag(frame, handle)
     end)
 end
 
--- =====================================================
--- หน้าต่างล็อกอิน
--- =====================================================
+-- ==================== หน้าต่างล็อกอิน ====================
 local LoginFrame = Instance.new("Frame", ScreenGui)
 LoginFrame.Size = UDim2.new(0, 320, 0, 180)
 LoginFrame.Position = UDim2.new(0.5, -160, 0.5, -90)
@@ -587,9 +537,7 @@ LoginError.TextSize = 12
 LoginError.TextXAlignment = Enum.TextXAlignment.Center
 LoginError.ZIndex = 11
 
--- =====================================================
--- UI หลัก
--- =====================================================
+-- ==================== UI หลัก ====================
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 320, 0, 435)
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -217)
@@ -635,7 +583,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (ตรวจสอบเวลาจริงจาก Roblox API)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (ตรวจสอบ AssetTypeId + Duration)"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -697,9 +645,7 @@ tStroke.Color = Color3.fromRGB(255, 215, 0)
 tStroke.Thickness = 1.5
 setDrag(ToggleBtn, ToggleBtn)
 
--- =====================================================
--- ฟังก์ชันล็อกอิน
--- =====================================================
+-- ==================== ฟังก์ชันล็อกอิน ====================
 local function tryLogin()
     local input = PasswordBox.Text
     if input == "HONKUKI_191Legendary" then
@@ -723,9 +669,7 @@ PasswordBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- =====================================================
--- ฟังก์ชันรีเฟรชผู้เล่น
--- =====================================================
+-- ==================== ฟังก์ชันรีเฟรชผู้เล่น ====================
 local function refreshPlayers()
     if not ListScroll or not ListScroll:IsDescendantOf(game) then return end
     for _, item in pairs(ListScroll:GetChildren()) do
@@ -770,12 +714,10 @@ local function refreshPlayers()
     ListScroll.CanvasSize = UDim2.new(0, 0, 0, Layout.AbsoluteContentSize.Y)
 end
 
--- =====================================================
--- ปุ่มกดทำงาน
--- =====================================================
+-- ==================== ปุ่มกดทำงาน ====================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (เรียก API แบบขนาน)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (ตรวจสอบ AssetTypeId + Duration)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
@@ -840,6 +782,5 @@ task.spawn(function()
     end
 end)
 
--- โฟกัสที่ TextBox
 task.wait(0.1)
 PasswordBox:CaptureFocus()
