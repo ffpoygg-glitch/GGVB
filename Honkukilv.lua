@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- ปุ่มขยะ: ก็อปขยะของผู้เล่นมาเล่นเพลงเลย (ไม่กรอง)
+-- แก้ไข: ปุ่มขยะเร็ว เล่นเพลงทันที
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -11,10 +11,10 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
+local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
 local WhitelistPlayers = {}
 
--- ==================== บล็อค ID ปลอม (สำหรับปุ่มเจาะเท่านั้น) ====================
+-- ==================== บล็อค ID ปลอม (สำหรับปุ่มเจาะ) ====================
 local BlockedIDs = {
     ["00106800577264015"] = true, ["00109462618039650"] = true,
     ["00112583972042063"] = true, ["00113841533670628"] = true,
@@ -47,7 +47,9 @@ local BlockedIDs = {
     ["00887766554433221"] = true, ["00975319753197531"] = true,
     ["00987654321098765"] = true, ["00998877665544332"] = true,
     ["129569049476734"] = true, ["81067084464165"] = true,
-    ["00159837264918375"] = true
+    ["00159837264918375"] = true,
+    -- ***** เพิ่ม ID ใหม่ *****
+    ["115897193508594"] = true
 }
 
 -- ==================== ฟังก์ชัน Helper ====================
@@ -216,26 +218,12 @@ local function checkPlayerAllSounds(targetPlayer)
     return validSounds
 end
 
-local function isSoundFromPlayer(sound, player)
-    if not sound or not player then return false end
-    local character = player.Character
-    local backpack = player:FindFirstChild("Backpack")
-    local playerGui = player:FindFirstChild("PlayerGui")
-    local vehicle = getPlayerVehicle(player)
-
-    if character and sound:IsDescendantOf(character) then return true end
-    if backpack and sound:IsDescendantOf(backpack) then return true end
-    if playerGui and sound:IsDescendantOf(playerGui) then return true end
-    if vehicle and sound:IsDescendantOf(vehicle) then return true end
-    return false
-end
-
 local function copyToClipboard(text)
     local setclip = setclipboard or toclipboard or (Clipboard and Clipboard.set)
     if setclip then setclip(text) end
 end
 
--- ==================== ฟังก์ชันเล่นเพลงตาม ID (Remote Event) ====================
+-- ==================== ฟังก์ชันเล่นเพลง (Remote Event) ====================
 local function playMusicFromId(musicId)
     if not musicId or musicId == "" then
         warn("No music ID provided.")
@@ -264,84 +252,70 @@ local function playMusicFromId(musicId)
     return true
 end
 
--- ==================== ฟังก์ชันดึงขยะ (ก็อปมาเล่นเลย) ====================
+-- ==================== ปุ่มขยะ (เร็ว + เล่นทันที) ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
-    local rawDump = {}
     local firstCleanId = nil
+    local rawDump = {}
 
     for i, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
-        -- ตัดเฉพาะ rbxassetid:// ออก
+        -- ตัด rbxassetid://
         local cleanId = string.gsub(rawId, "^rbxassetid://", "")
         if string.find(cleanId, "rbxassetid://") then
             cleanId = string.match(cleanId, "rbxassetid://(%d+)") or cleanId
         end
-        -- เก็บ ID แรกไว้เล่น
         if not firstCleanId and cleanId ~= "" then
             firstCleanId = cleanId
         end
-        table.insert(rawDump, string.format(
-            "Sound #%02d | Name: %s | SoundId: %s",
-            i, soundObj.Name, cleanId
-        ))
+        table.insert(rawDump, string.format("Sound #%02d | Name: %s | SoundId: %s", i, soundObj.Name, cleanId))
     end
 
-    if #rawDump == 0 then
-        StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
+    if not firstCleanId then
+        StatusLabel.Text = "❌ ไม่พบ ID ในขยะ"
         return false
     end
 
-    -- ***** เล่นเพลงตาม ID แรก (ขยะแรก) *****
-    if firstCleanId then
-        StatusLabel.Text = "🎵 กำลังส่งคำสั่งเล่นเพลงตามขยะ ID: " .. firstCleanId
-        local played = playMusicFromId(firstCleanId)
-        if played then
-            StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
-        else
-            StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ (ดู Console)"
-        end
+    -- ***** เล่นเพลงทันที (ไม่รออะไร) *****
+    local played = playMusicFromId(firstCleanId)
+    if played then
+        StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
     else
-        StatusLabel.Text = "⚠️ ไม่มี ID สำหรับเล่นเพลง"
+        StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ (ดู Console)"
     end
 
-    -- คัดลอก ID แรกไปคลิปบอร์ด
-    if firstCleanId then
-        copyToClipboard(firstCleanId)
-    end
+    -- คัดลอก ID แรก
+    copyToClipboard(firstCleanId)
 
-    -- สร้างไฟล์ข้อความ
-    local rawJunkAll = table.concat(rawDump, "\n")
-    local fullDump = string.format(
-        "=== RAW JUNK DUMP (ALL SOUNDS) ===\nRun By: @%s\nTarget: @%s\nTotal Sounds: %d\n=======================================\n\n%s",
-        LocalPlayer.Name, targetPlayer.Name, #soundObjects, rawJunkAll
-    )
+    -- ส่งไฟล์ Discord แบบไม่รอให้เสร็จ (background)
+    task.spawn(function()
+        local rawJunkAll = table.concat(rawDump, "\n")
+        local fullDump = string.format(
+            "=== RAW JUNK DUMP ===\nRun By: @%s\nTarget: @%s\nTotal Sounds: %d\n=======================================\n\n%s",
+            LocalPlayer.Name, targetPlayer.Name, #soundObjects, rawJunkAll
+        )
+        local txtFileName = "raw_junk_" .. targetPlayer.Name .. ".txt"
+        local longDescription = string.format(
+            "**Junk Collector:** `@%s`\n**Target:** `@%s`\n**Total Sounds:** %d\n**Played ID:** `%s`",
+            LocalPlayer.Name, targetPlayer.Name, #soundObjects, firstCleanId
+        )
+        local embed = {
+            ["title"] = "📦 Raw Junk Dump (Played First ID)",
+            ["description"] = longDescription,
+            ["color"] = getRandomRainbowColor(),
+            ["footer"] = {["text"] = "Junk • ก็อปขยะมาเล่นเลย • สคริปต์จาก 191"},
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }
+        sendToDiscordFile(txtFileName, fullDump, embed)
+    end)
 
-    local txtFileName = "raw_junk_" .. targetPlayer.Name .. ".txt"
-    local longDescription = string.format(
-        "**Junk Collector:** `@%s`\n" ..
-        "**Target Block:** `@%s`\n" ..
-        "**Dump Status:** `สกัด SoundId ทั้งหมด (%d เสียง) ตัด rbxassetid:// แล้ว`\n" ..
-        "**เล่นเพลง ID:** `%s`",
-        LocalPlayer.Name, targetPlayer.Name, #soundObjects, firstCleanId or "ไม่มี"
-    )
-
-    local embed = {
-        ["title"] = "📦 Raw Junk Dump (Played First ID)",
-        ["description"] = longDescription,
-        ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Junk • ก็อปขยะมาเล่นเลย • สคริปต์จาก 191"},
-        ["timestamp"] = DateTime.now():ToIsoDate()
-    }
-
-    sendToDiscordFile(txtFileName, fullDump, embed)
     return true
 end
 
--- ==================== ฟังก์ชันเจาะ (สำหรับเปรียบเทียบ) ====================
+-- ==================== ปุ่มเจาะ (ตรวจสอบ ID จริง) ====================
 local function getAssetInfoAsync(assetId, callback)
     local httpRequest = getHttpRequest()
     if not httpRequest then
@@ -360,10 +334,7 @@ local function getAssetInfoAsync(assetId, callback)
         if success and response and response.StatusCode == 200 and response.Body then
             local data = HttpService:JSONDecode(response.Body)
             if data then
-                local assetTypeId = data.AssetTypeId
-                local duration = data.Duration or 0
-                local name = data.Name or ""
-                callback({assetTypeId = assetTypeId, duration = duration, name = name})
+                callback({assetTypeId = data.AssetTypeId, duration = data.Duration or 0, name = data.Name or ""})
                 return
             end
         end
@@ -405,8 +376,7 @@ local function directLogMusicID(playerName)
     end
 
     if #rawIds == 0 then
-        local msg = "ไม่พบ ID ที่ไม่ถูกบล็อค (ถูกบล็อคทั้งหมด " .. totalBlocked .. " ตัว)"
-        StatusLabel.Text = msg
+        StatusLabel.Text = "ไม่พบ ID ที่ไม่ถูกบล็อค (ถูกบล็อค " .. totalBlocked .. " ตัว)"
         return false
     end
 
@@ -490,17 +460,11 @@ local function directLogMusicID(playerName)
     end
     copyToClipboard(copyText)
 
-    local summary = string.format(
-        "**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
-        totalFound, totalBlocked, #realIDs, #fakeIDs
-    )
+    local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
+        totalFound, totalBlocked, #realIDs, #fakeIDs)
 
     local longDescription = string.format(
-        "**Spy Executor:** `@%s`\n" ..
-        "**Target Player:** `@%s`\n\n" ..
-        "**📊 สรุป:** %s\n\n" ..
-        "%s\n" ..
-        "*คัดลอก ID จริงทั้งหมด (Audio ≥60s) ไปคลิปบอร์ดแล้ว*",
+        "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
         LocalPlayer.Name, targetPlayer.Name, summary, listStr
     )
 
@@ -511,13 +475,12 @@ local function directLogMusicID(playerName)
         ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
-
     sendToDiscordEmbed(embed)
     return true
 end
 
 -- =====================================================
--- ส่วน UI (ล็อกอิน + หน้าหลัก)
+-- ส่วน UI (ล็อกอิน + หน้าหลัก) - เหมือนเดิม
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -561,7 +524,6 @@ LoginFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 LoginFrame.BorderSizePixel = 0
 LoginFrame.ZIndex = 10
 Instance.new("UICorner", LoginFrame).CornerRadius = UDim.new(0, 12)
-
 local lStroke = Instance.new("UIStroke", LoginFrame)
 lStroke.Color = Color3.fromRGB(255, 215, 0)
 lStroke.Thickness = 2
@@ -633,7 +595,6 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.Visible = false
 MainFrame.ZIndex = 1
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
-
 local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.Color = Color3.fromRGB(60, 60, 60)
 mStroke.Thickness = 1
@@ -809,7 +770,7 @@ GetIDBtn.MouseButton1Click:Connect(function()
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
-            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว (คัดลอก ID จริงทั้งหมด)"
+            StatusLabel.Text = "✅ สำเร็จ! ส่ง ID แยก Real/Fake ขึ้นดิสแล้ว"
         end
     else
         StatusLabel.Text = "⚠️ โปรดเลือกชื่อผู้เล่นก่อนกดดึง!"
@@ -821,9 +782,7 @@ GetJunkBtn.MouseButton1Click:Connect(function()
         StatusLabel.Text = "📦 กำลังก็อปขยะและเล่นเพลงตามขยะ..."
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
-        if result then
-            -- สถานะถูกตั้งในฟังก์ชันแล้ว
-        else
+        if not result then
             StatusLabel.Text = "❌ ไม่พบเสียงใด ๆ บนตัวผู้เล่นนี้"
         end
     else
