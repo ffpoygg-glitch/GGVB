@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไข: ปรับปรุง BlockedIDs และความเสถียร
+-- แก้ไข: ใช้ string.rep สำหรับ ID ยาว, จัดรูปแบบให้รันได้
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -11,10 +11,12 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
+local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
 local WhitelistPlayers = {}
 
--- ==================== บล็อค ID ปลอม (จัดรูปแบบให้อ่านง่าย) ====================
+-- ==================== บล็อค ID ปลอม (ใช้ string.rep สำหรับ ID ยาว) ====================
+local LONG_ZERO_ID = string.rep("0", 200)  -- สร้างเลข 0 ยาว 200 ตัว
+
 local BlockedIDs = {
     -- ชุดที่ 1
     ["00106800577264015"] = true, ["00109462618039650"] = true,
@@ -54,8 +56,6 @@ local BlockedIDs = {
     -- เพิ่มเติม
     ["00159837264918375"] = true,
     ["115897193508594"] = true,
-    -- ID ยาวมาก (บล็อคเลข 0 ทั้งหมด)
-    ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
 }
 
 -- ==================== ฟังก์ชัน Helper ====================
@@ -508,7 +508,7 @@ local function directLogMusicID(playerName)
 end
 
 -- =====================================================
--- ส่วน UI (ล็อกอิน + หน้าหลัก)
+-- ส่วน UI (ล็อกอิน + หน้าหลัก) - เหมือนเดิม
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
@@ -849,7 +849,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
 end)
 
--- ==================== วนรีเฟรชอัตโนมัติ ====================
 task.spawn(function()
     while task.wait(5) do
         if MainFrame.Visible then
