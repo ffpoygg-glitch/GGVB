@@ -1,7 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไขระบบแยก Real/Fake ให้แม่นยำขึ้น
--- ตรวจสอบ AssetTypeId และ Duration จาก Roblox API
+-- เพิ่มระบบดึงเสียงจากรถ (Vehicle) ที่ผู้เล่นนั่งอยู่
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -11,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
+local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
 local WhitelistPlayers = {}
 
 -- ==================== บล็อค ID ปลอมทั้งหมด ====================
@@ -153,19 +152,29 @@ local function extractIDsFromPattern(text)
     return ids
 end
 
-local function isSoundFromPlayer(sound, player)
-    if not sound or not player then return false end
+-- ==================== ฟังก์ชันหา Vehicle ที่ผู้เล่นนั่ง ====================
+local function getPlayerVehicle(player)
+    if not player then return nil end
     local character = player.Character
-    local backpack = player:FindFirstChild("Backpack")
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if character and sound:IsDescendantOf(character) then return true end
-    if backpack and sound:IsDescendantOf(backpack) then return true end
-    if playerGui and sound:IsDescendantOf(playerGui) then return true end
-    return false
+    if not character then return nil end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+    local seatPart = humanoid.SeatPart
+    if not seatPart then return nil end
+    local vehicle = seatPart.Parent
+    while vehicle and not vehicle:IsA("Model") do
+        vehicle = vehicle.Parent
+    end
+    if vehicle and vehicle:IsA("Model") then
+        return vehicle
+    end
+    return nil
 end
 
+-- ==================== สแกนเสียงจากตัวผู้เล่น + Vehicle ====================
 local function checkPlayerAllSounds(targetPlayer)
     if not targetPlayer then return {} end
+
     local scanTargets = {}
     if targetPlayer.Character then table.insert(scanTargets, targetPlayer.Character) end
     local backpack = targetPlayer:FindFirstChild("Backpack")
@@ -173,7 +182,15 @@ local function checkPlayerAllSounds(targetPlayer)
     local pGui = targetPlayer:FindFirstChild("PlayerGui")
     if pGui then table.insert(scanTargets, pGui) end
 
+    -- เพิ่ม Vehicle ที่ผู้เล่นนั่ง
+    local vehicle = getPlayerVehicle(targetPlayer)
+    if vehicle then
+        table.insert(scanTargets, vehicle)
+    end
+
     local validSounds = {}
+    local soundMap = {} -- กันเสียงซ้ำ (ใช้ SoundId เป็น key)
+
     local NameBlacklist = {
         ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
         ["jumping"] = true, ["landing"] = true, ["running"] = true,
@@ -186,14 +203,33 @@ local function checkPlayerAllSounds(targetPlayer)
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
-                    if not NameBlacklist[soundNameLower] and isSoundFromPlayer(obj, targetPlayer) then
-                        table.insert(validSounds, obj)
+                    if not NameBlacklist[soundNameLower] then
+                        local key = obj.SoundId
+                        if not soundMap[key] then
+                            soundMap[key] = true
+                            table.insert(validSounds, obj)
+                        end
                     end
                 end
             end
         end
     end
     return validSounds
+end
+
+-- ==================== เช็คว่า Sound เป็นของผู้เล่น (ใช้สำหรับ UI) ====================
+local function isSoundFromPlayer(sound, player)
+    if not sound or not player then return false end
+    local character = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    local playerGui = player:FindFirstChild("PlayerGui")
+    local vehicle = getPlayerVehicle(player)
+
+    if character and sound:IsDescendantOf(character) then return true end
+    if backpack and sound:IsDescendantOf(backpack) then return true end
+    if playerGui and sound:IsDescendantOf(playerGui) then return true end
+    if vehicle and sound:IsDescendantOf(vehicle) then return true end
+    return false
 end
 
 local function copyToClipboard(text)
@@ -220,7 +256,6 @@ local function getAssetInfoAsync(assetId, callback)
         if success and response and response.StatusCode == 200 and response.Body then
             local data = HttpService:JSONDecode(response.Body)
             if data then
-                -- ตรวจสอบว่าเป็น Audio หรือไม่ (AssetTypeId == 3)
                 local assetTypeId = data.AssetTypeId
                 local duration = data.Duration or 0
                 local name = data.Name or ""
@@ -232,7 +267,7 @@ local function getAssetInfoAsync(assetId, callback)
     end)
 end
 
--- ==================== ฟังก์ชันหลักปุ่มเจาะ (แบบขนาน + เช็ค AssetTypeId) ====================
+-- ==================== ฟังก์ชันหลักปุ่มเจาะ ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -272,7 +307,6 @@ local function directLogMusicID(playerName)
         return false
     end
 
-    -- เรียก API แบบขนานเพื่อดึงข้อมูล Asset
     local idData = {}
     local pendingCount = 0
     local completedCount = 0
@@ -288,7 +322,6 @@ local function directLogMusicID(playerName)
                     idData[id].assetTypeId = info.assetTypeId
                     idData[id].name = info.name
                 else
-                    -- ถ้า API ไม่ตอบ ให้ถือว่าไม่ใช่ Audio
                     idData[id].duration = 0
                     idData[id].assetTypeId = 0
                 end
@@ -298,14 +331,12 @@ local function directLogMusicID(playerName)
         end
     end
 
-    -- รอให้ทุกตัวเสร็จ (หรือ timeout)
     local waitCount = 0
     while completedCount < pendingCount and waitCount < maxAttempts do
         task.wait(0.1)
         waitCount = waitCount + 1
     end
 
-    -- ถ้ายังค้างอยู่ ให้ถือว่าไม่ใช่ Audio
     for id, info in pairs(idData) do
         if not info.checked then
             info.duration = 0
@@ -314,11 +345,9 @@ local function directLogMusicID(playerName)
         end
     end
 
-    -- แยก Real / Fake โดยใช้ AssetTypeId และ Duration
     local realIDs = {}
     local fakeIDs = {}
     for id, info in pairs(idData) do
-        -- เงื่อนไข Real: เป็น Audio (AssetTypeId == 3) และ Duration >= 60
         if info.assetTypeId == 3 and info.duration >= 60 then
             table.insert(realIDs, {id = id, len = info.duration, name = info.name})
         else
@@ -345,7 +374,6 @@ local function directLogMusicID(playerName)
         end
     end
 
-    -- คัดลอก Real IDs ทั้งหมด (ถ้ามี) หรือ Fake ตัวแรก
     local copyText = ""
     if #realIDs > 0 then
         for i, item in ipairs(realIDs) do
@@ -374,10 +402,10 @@ local function directLogMusicID(playerName)
     )
 
     local embed = {
-        ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
+        ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration + Vehicle)",
         ["description"] = longDescription,
         ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • ตรวจสอบ AssetTypeId • สคริปต์จาก 191"},
+        ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
         ["timestamp"] = DateTime.now():ToIsoDate()
     }
 
@@ -583,7 +611,7 @@ StatusLabel.Size = UDim2.new(0.9, 0, 0, 35)
 StatusLabel.Position = UDim2.new(0.05, 0, 0.50, 0)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.BackgroundTransparency = 0.9
-StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (ตรวจสอบ AssetTypeId + Duration)"
+StatusLabel.Text = "ระบบดึงส่งตรงทำงานปกติ (รวมเสียงจากรถ)"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 11
@@ -717,7 +745,7 @@ end
 -- ==================== ปุ่มกดทำงาน ====================
 GetIDBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "🔍 กำลังเจาะ ID (ตรวจสอบ AssetTypeId + Duration)..."
+        StatusLabel.Text = "🔍 กำลังเจาะ ID (รวมเสียงจากรถ)..."
         task.wait(0.05)
         local result = directLogMusicID(CurrentSelectedPlayer.Name)
         if result then
@@ -730,7 +758,7 @@ end)
 
 GetJunkBtn.MouseButton1Click:Connect(function()
     if CurrentSelectedPlayer then
-        StatusLabel.Text = "📦 กำลังดึงข้อมูลขยะดิบ (เฉพาะเสียงของผู้เล่น)..."
+        StatusLabel.Text = "📦 กำลังดึงข้อมูลขยะดิบ (รวมเสียงจากรถ)..."
         task.wait(0.05)
         local result = directLogRawJunk(CurrentSelectedPlayer.Name)
         if result then
