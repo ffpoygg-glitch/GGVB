@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไข: ใช้ string.rep สำหรับ ID ยาว, จัดรูปแบบให้รันได้
+-- แก้ไข: ส่ง ID ทั้งหมด ไม่ตัดทิ้ง (ใช้ไฟล์เมื่อยาวเกิน)
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -14,11 +14,8 @@ local CurrentSelectedPlayer = nil
 local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
 local WhitelistPlayers = {}
 
--- ==================== บล็อค ID ปลอม (ใช้ string.rep สำหรับ ID ยาว) ====================
-local LONG_ZERO_ID = string.rep("0", 200)  -- สร้างเลข 0 ยาว 200 ตัว
-
+-- ==================== บล็อค ID ปลอม ====================
 local BlockedIDs = {
-    -- ชุดที่ 1
     ["00106800577264015"] = true, ["00109462618039650"] = true,
     ["00112583972042063"] = true, ["00113841533670628"] = true,
     ["00116872955970254"] = true, ["00117424747387525"] = true,
@@ -30,10 +27,8 @@ local BlockedIDs = {
     ["0083260119948695"] = true, ["0083681471562121"] = true,
     ["0083848201981900"] = true, ["0090308298517537"] = true,
     ["0093338918256962"] = true, ["0093932829347443"] = true,
-    -- สั้น ๆ
     ["00"] = true, ["4"] = true, ["62"] = true, ["7"] = true,
     ["78899"] = true, ["83260119948695"] = true, ["9"] = true,
-    -- ชุดที่ 2
     ["00120104871360327"] = true, ["00129060362076134"] = true,
     ["101631982347841"] = true, ["112210298860778"] = true,
     ["115819698454027"] = true, ["116331922770563"] = true,
@@ -44,7 +39,6 @@ local BlockedIDs = {
     ["71352236"] = true, ["76500780055460"] = true,
     ["78515442941510"] = true, ["90533928572341"] = true,
     ["99721399503975"] = true,
-    -- ชุดที่ 3
     ["00101020203030404"] = true, ["00112233445566778"] = true,
     ["00123456789012345"] = true, ["00135791357913579"] = true,
     ["00159260374815926"] = true, ["00246802468024680"] = true,
@@ -53,9 +47,10 @@ local BlockedIDs = {
     ["00887766554433221"] = true, ["00975319753197531"] = true,
     ["00987654321098765"] = true, ["00998877665544332"] = true,
     ["129569049476734"] = true, ["81067084464165"] = true,
-    -- เพิ่มเติม
     ["00159837264918375"] = true,
     ["115897193508594"] = true,
+    -- ***** เพิ่ม ID ที่เป็นเลข 0 ยาว ๆ *****
+    ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
 }
 
 -- ==================== ฟังก์ชัน Helper ====================
@@ -350,6 +345,7 @@ local function getAssetInfoAsync(assetId, callback)
     end)
 end
 
+-- ==================== ปุ่มเจาะ (แก้ให้ส่งครบทุก ID + ใช้ไฟล์เมื่อยาว) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -439,6 +435,7 @@ local function directLogMusicID(playerName)
     table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
 
+    -- สร้างข้อความรายการทั้งหมด
     local function buildFullList()
         local lines = {}
         if #realIDs > 0 then
@@ -462,6 +459,7 @@ local function directLogMusicID(playerName)
     local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
         totalFound, totalBlocked, #realIDs, #fakeIDs)
 
+    -- คัดลอก ID จริงทั้งหมด (ถ้ามี) หรือ Fake ตัวแรก
     local copyText = ""
     if #realIDs > 0 then
         for i, item in ipairs(realIDs) do
@@ -475,7 +473,9 @@ local function directLogMusicID(playerName)
     end
     copyToClipboard(copyText)
 
+    -- ตรวจสอบว่าข้อความยาวเกิน 4000 ตัวอักษรหรือไม่
     if string.len(fullListText) > 4000 then
+        -- ส่งเป็นไฟล์แนบ
         local fileName = "audio_ids_" .. targetPlayer.Name .. ".txt"
         local fileContent = fullListText
         local embedData = {
@@ -490,6 +490,7 @@ local function directLogMusicID(playerName)
         }
         sendToDiscordFile(fileName, fileContent, embedData)
     else
+        -- ส่ง Embed ปกติ
         local longDescription = string.format(
             "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
             LocalPlayer.Name, targetPlayer.Name, summary, fullListText
@@ -508,7 +509,7 @@ local function directLogMusicID(playerName)
 end
 
 -- =====================================================
--- ส่วน UI (ล็อกอิน + หน้าหลัก) - เหมือนเดิม
+-- ส่วน UI (ล็อกอิน + หน้าหลัก)
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
