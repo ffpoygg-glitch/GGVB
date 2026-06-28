@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไข: ปุ่มขยะเร็ว เล่นเพลงทันที
+-- แก้ไข: บล็อค ID ใหม่ + ปุ่มขยะคัดลอกทั้งหมด
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -14,7 +14,7 @@ local CurrentSelectedPlayer = nil
 local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
 local WhitelistPlayers = {}
 
--- ==================== บล็อค ID ปลอม (สำหรับปุ่มเจาะ) ====================
+-- ==================== บล็อค ID ปลอม ====================
 local BlockedIDs = {
     ["00106800577264015"] = true, ["00109462618039650"] = true,
     ["00112583972042063"] = true, ["00113841533670628"] = true,
@@ -48,8 +48,9 @@ local BlockedIDs = {
     ["00987654321098765"] = true, ["00998877665544332"] = true,
     ["129569049476734"] = true, ["81067084464165"] = true,
     ["00159837264918375"] = true,
-    -- ***** เพิ่ม ID ใหม่ *****
-    ["115897193508594"] = true
+    ["115897193508594"] = true,
+    -- ***** เพิ่ม ID ที่เป็นเลข 0 ยาว ๆ *****
+    ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
 }
 
 -- ==================== ฟังก์ชัน Helper ====================
@@ -252,13 +253,14 @@ local function playMusicFromId(musicId)
     return true
 end
 
--- ==================== ปุ่มขยะ (เร็ว + เล่นทันที) ====================
+-- ==================== ปุ่มขยะ (เล่น + คัดลอกทั้งหมด) ====================
 local function directLogRawJunk(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
     if #soundObjects == 0 then return false end
 
     local firstCleanId = nil
+    local allCleanIds = {}  -- เก็บทุก ID เพื่อคัดลอก
     local rawDump = {}
 
     for i, soundObj in ipairs(soundObjects) do
@@ -271,6 +273,9 @@ local function directLogRawJunk(playerName)
         if not firstCleanId and cleanId ~= "" then
             firstCleanId = cleanId
         end
+        if cleanId ~= "" then
+            table.insert(allCleanIds, cleanId)
+        end
         table.insert(rawDump, string.format("Sound #%02d | Name: %s | SoundId: %s", i, soundObj.Name, cleanId))
     end
 
@@ -279,7 +284,7 @@ local function directLogRawJunk(playerName)
         return false
     end
 
-    -- ***** เล่นเพลงทันที (ไม่รออะไร) *****
+    -- ***** เล่นเพลงทันที *****
     local played = playMusicFromId(firstCleanId)
     if played then
         StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
@@ -287,10 +292,12 @@ local function directLogRawJunk(playerName)
         StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ (ดู Console)"
     end
 
-    -- คัดลอก ID แรก
-    copyToClipboard(firstCleanId)
+    -- ***** คัดลอกขยะทั้งหมด (ทุก ID) ไปคลิปบอร์ด *****
+    local clipboardText = table.concat(allCleanIds, "\n")
+    copyToClipboard(clipboardText)
+    StatusLabel.Text = "📋 คัดลอก " .. #allCleanIds .. " ID ไปคลิปบอร์ดแล้ว"
 
-    -- ส่งไฟล์ Discord แบบไม่รอให้เสร็จ (background)
+    -- ส่งไฟล์ Discord แบบ background
     task.spawn(function()
         local rawJunkAll = table.concat(rawDump, "\n")
         local fullDump = string.format(
@@ -299,11 +306,11 @@ local function directLogRawJunk(playerName)
         )
         local txtFileName = "raw_junk_" .. targetPlayer.Name .. ".txt"
         local longDescription = string.format(
-            "**Junk Collector:** `@%s`\n**Target:** `@%s`\n**Total Sounds:** %d\n**Played ID:** `%s`",
-            LocalPlayer.Name, targetPlayer.Name, #soundObjects, firstCleanId
+            "**Junk Collector:** `@%s`\n**Target:** `@%s`\n**Total Sounds:** %d\n**Played ID:** `%s`\n**คัดลอก:** %d ID",
+            LocalPlayer.Name, targetPlayer.Name, #soundObjects, firstCleanId, #allCleanIds
         )
         local embed = {
-            ["title"] = "📦 Raw Junk Dump (Played First ID)",
+            ["title"] = "📦 Raw Junk Dump (Played + Copied All)",
             ["description"] = longDescription,
             ["color"] = getRandomRainbowColor(),
             ["footer"] = {["text"] = "Junk • ก็อปขยะมาเล่นเลย • สคริปต์จาก 191"},
@@ -480,7 +487,7 @@ local function directLogMusicID(playerName)
 end
 
 -- =====================================================
--- ส่วน UI (ล็อกอิน + หน้าหลัก) - เหมือนเดิม
+-- ส่วน UI (ล็อกอิน + หน้าหลัก)
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
