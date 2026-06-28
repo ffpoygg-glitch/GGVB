@@ -11,7 +11,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WebhookURL = "https://discord.com/api/webhooks/1520312240782442536/ZQ5nuEq80B9ZcrH7nDpjvFYIcXVRbhAqjRkF7Szsj2aHDF9Tm1TIJ9VVOVu6Nu91BE9a"
+local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
 local WhitelistPlayers = {}
 
 -- ==================== บล็อค ID ปลอมทั้งหมด ====================
