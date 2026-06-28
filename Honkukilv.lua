@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไข: ส่ง ID ทั้งหมด ไม่ตัดทิ้ง (ใช้ไฟล์เมื่อยาวเกิน)
+-- แก้ไข: บล็อค ID ใหม่ + ปุ่มขยะคัดลอกทั้งหมด
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -260,11 +260,12 @@ local function directLogRawJunk(playerName)
     if #soundObjects == 0 then return false end
 
     local firstCleanId = nil
-    local allCleanIds = {}
+    local allCleanIds = {}  -- เก็บทุก ID เพื่อคัดลอก
     local rawDump = {}
 
     for i, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
+        -- ตัด rbxassetid://
         local cleanId = string.gsub(rawId, "^rbxassetid://", "")
         if string.find(cleanId, "rbxassetid://") then
             cleanId = string.match(cleanId, "rbxassetid://(%d+)") or cleanId
@@ -283,6 +284,7 @@ local function directLogRawJunk(playerName)
         return false
     end
 
+    -- ***** เล่นเพลงทันที *****
     local played = playMusicFromId(firstCleanId)
     if played then
         StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
@@ -290,10 +292,12 @@ local function directLogRawJunk(playerName)
         StatusLabel.Text = "❌ เล่นเพลงไม่สำเร็จ (ดู Console)"
     end
 
+    -- ***** คัดลอกขยะทั้งหมด (ทุก ID) ไปคลิปบอร์ด *****
     local clipboardText = table.concat(allCleanIds, "\n")
     copyToClipboard(clipboardText)
     StatusLabel.Text = "📋 คัดลอก " .. #allCleanIds .. " ID ไปคลิปบอร์ดแล้ว"
 
+    -- ส่งไฟล์ Discord แบบ background
     task.spawn(function()
         local rawJunkAll = table.concat(rawDump, "\n")
         local fullDump = string.format(
@@ -318,7 +322,7 @@ local function directLogRawJunk(playerName)
     return true
 end
 
--- ==================== ปุ่มเจาะ (ตรวจสอบ ID จริง + ส่งครบทุก ID) ====================
+-- ==================== ปุ่มเจาะ (ตรวจสอบ ID จริง) ====================
 local function getAssetInfoAsync(assetId, callback)
     local httpRequest = getHttpRequest()
     if not httpRequest then
@@ -345,7 +349,6 @@ local function getAssetInfoAsync(assetId, callback)
     end)
 end
 
--- ==================== ปุ่มเจาะ (แก้ให้ส่งครบทุก ID + ใช้ไฟล์เมื่อยาว) ====================
 local function directLogMusicID(playerName)
     local targetPlayer = Players:FindFirstChild(playerName)
     local soundObjects = checkPlayerAllSounds(targetPlayer)
@@ -435,31 +438,22 @@ local function directLogMusicID(playerName)
     table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
 
-    -- สร้างข้อความรายการทั้งหมด
-    local function buildFullList()
-        local lines = {}
-        if #realIDs > 0 then
-            table.insert(lines, "✅ REAL IDs (≥60s):")
-            for i, item in ipairs(realIDs) do
-                table.insert(lines, string.format("%02d. `%s` (%.1f sec) – %s", i, item.id, item.len, item.name))
-            end
+    local listStr = ""
+    if #realIDs > 0 then
+        listStr = listStr .. "**✅ REAL IDs (Audio ≥60s):**\n"
+        for i, item in ipairs(realIDs) do
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – **%s**\n", i, item.id, item.len, item.name)
         end
-        if #fakeIDs > 0 then
-            if #realIDs > 0 then table.insert(lines, "")
-            table.insert(lines, "❌ FAKE IDs (<60s หรือไม่ใช่ Audio):")
-            for i, item in ipairs(fakeIDs) do
-                local typeStr = (item.typeId == 3) and "Audio" or "ประเภท " .. tostring(item.typeId)
-                table.insert(lines, string.format("%02d. `%s` (%.1f sec) – %s", i, item.id, item.len, typeStr))
-            end
+    end
+    if #fakeIDs > 0 then
+        if #realIDs > 0 then listStr = listStr .. "\n" end
+        listStr = listStr .. "**❌ FAKE IDs (ไม่ใช่ Audio หรือ <60s):**\n"
+        for i, item in ipairs(fakeIDs) do
+            local typeStr = (item.typeId == 3) and "Audio" or "ประเภท " .. tostring(item.typeId)
+            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – %s\n", i, item.id, item.len, typeStr)
         end
-        return table.concat(lines, "\n")
     end
 
-    local fullListText = buildFullList()
-    local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
-        totalFound, totalBlocked, #realIDs, #fakeIDs)
-
-    -- คัดลอก ID จริงทั้งหมด (ถ้ามี) หรือ Fake ตัวแรก
     local copyText = ""
     if #realIDs > 0 then
         for i, item in ipairs(realIDs) do
@@ -473,38 +467,22 @@ local function directLogMusicID(playerName)
     end
     copyToClipboard(copyText)
 
-    -- ตรวจสอบว่าข้อความยาวเกิน 4000 ตัวอักษรหรือไม่
-    if string.len(fullListText) > 4000 then
-        -- ส่งเป็นไฟล์แนบ
-        local fileName = "audio_ids_" .. targetPlayer.Name .. ".txt"
-        local fileContent = fullListText
-        local embedData = {
-            ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
-            ["description"] = string.format(
-                "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n*รายการ ID ทั้งหมดอยู่ในไฟล์แนบ*\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
-                LocalPlayer.Name, targetPlayer.Name, summary
-            ),
-            ["color"] = getRandomRainbowColor(),
-            ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
-            ["timestamp"] = DateTime.now():ToIsoDate()
-        }
-        sendToDiscordFile(fileName, fileContent, embedData)
-    else
-        -- ส่ง Embed ปกติ
-        local longDescription = string.format(
-            "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
-            LocalPlayer.Name, targetPlayer.Name, summary, fullListText
-        )
-        local embed = {
-            ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
-            ["description"] = longDescription,
-            ["color"] = getRandomRainbowColor(),
-            ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
-            ["timestamp"] = DateTime.now():ToIsoDate()
-        }
-        sendToDiscordEmbed(embed)
-    end
+    local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
+        totalFound, totalBlocked, #realIDs, #fakeIDs)
 
+    local longDescription = string.format(
+        "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
+        LocalPlayer.Name, targetPlayer.Name, summary, listStr
+    )
+
+    local embed = {
+        ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
+        ["description"] = longDescription,
+        ["color"] = getRandomRainbowColor(),
+        ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
+        ["timestamp"] = DateTime.now():ToIsoDate()
+    }
+    sendToDiscordEmbed(embed)
     return true
 end
 
