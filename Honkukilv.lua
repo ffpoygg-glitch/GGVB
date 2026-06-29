@@ -11,7 +11,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer.PlayerGui
 
 local CurrentSelectedPlayer = nil
-local WebhookURL = "https://discord.com/api/webhooks/1514562602208854159/mq9nAgQ_zpnb1czvwSfJRJq1zDAvXz9vpsF2CCzL7aphQS-BN7YTN0NM5eaYM1WYJw29"
+local WebhookURL = "https://discord.com/api/webhooks/1520715513099976774/bS5R2KIERzDOcrHc6WOUMiM5QK78P1oRgmshyADTGp0zsjYBUUMQbUyK5WHbAvvoCoUp"
 local WhitelistPlayers = {}
 
 -- ==================== บล็อค ID ปลอม ====================
@@ -49,6 +49,7 @@ local BlockedIDs = {
     ["129569049476734"] = true, ["81067084464165"] = true,
     ["00159837264918375"] = true,
     ["115897193508594"] = true,
+    ["123728962822472"] = true,
     -- ***** เพิ่ม ID ที่เป็นเลข 0 ยาว ๆ *****
     ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
 }
