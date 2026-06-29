@@ -1,6 +1,6 @@
 -- =====================================================
 -- HONKUKI DEEP VALIDATOR SCANNER (ALL-IN-ONE)
--- แก้ไข: บล็อค ID ใหม่ + ปุ่มขยะคัดลอกทั้งหมด
+-- แก้ไข: ปุ่มขยะคัดลอกทั้งหมด + กรองเสียงสเก็ตบอร์ด/รถ
 -- =====================================================
 
 local Players = game:GetService("Players")
@@ -49,7 +49,6 @@ local BlockedIDs = {
     ["129569049476734"] = true, ["81067084464165"] = true,
     ["00159837264918375"] = true,
     ["115897193508594"] = true,
-    ["123728962822472"] = true,
     -- ***** เพิ่ม ID ที่เป็นเลข 0 ยาว ๆ *****
     ["0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"] = true
 }
@@ -194,10 +193,19 @@ local function checkPlayerAllSounds(targetPlayer)
     local validSounds = {}
     local soundMap = {}
 
+    -- ***** เพิ่มคำกรองสเก็ตบอร์ด/รถ/อุปกรณ์ในแผนที่ *****
     local NameBlacklist = {
         ["gettingup"] = true, ["died"] = true, ["freefalling"] = true,
         ["jumping"] = true, ["landing"] = true, ["running"] = true,
-        ["splash"] = true, ["swimming"] = true, ["climbing"] = true
+        ["splash"] = true, ["swimming"] = true, ["climbing"] = true,
+        -- เพิ่มคำที่เกี่ยวข้องกับอุปกรณ์ในแผนที่
+        ["skateboard"] = true, ["skate"] = true, ["board"] = true,
+        ["car"] = true, ["vehicle"] = true, ["bike"] = true,
+        ["scooter"] = true, ["bicycle"] = true, ["motorcycle"] = true,
+        ["engine"] = true, ["motor"] = true, ["horn"] = true,
+        ["tire"] = true, ["wheel"] = true, ["brake"] = true,
+        ["squeak"] = true, ["driving"] = true, ["road"] = true,
+        ["crash"] = true, ["impact"] = true, ["bump"] = true
     }
 
     for _, folder in ipairs(scanTargets) do
@@ -206,7 +214,15 @@ local function checkPlayerAllSounds(targetPlayer)
             for _, obj in ipairs(descendants) do
                 if obj:IsA("Sound") and obj.SoundId ~= "" and obj.IsPlaying then
                     local soundNameLower = string.lower(obj.Name)
-                    if not NameBlacklist[soundNameLower] then
+                    -- ตรวจสอบ Blacklist (รวมคำอุปกรณ์)
+                    local isBlacklisted = false
+                    for blockedName, _ in pairs(NameBlacklist) do
+                        if string.find(soundNameLower, blockedName) then
+                            isBlacklisted = true
+                            break
+                        end
+                    end
+                    if not isBlacklisted then
                         local key = obj.SoundId
                         if not soundMap[key] then
                             soundMap[key] = true
@@ -261,12 +277,11 @@ local function directLogRawJunk(playerName)
     if #soundObjects == 0 then return false end
 
     local firstCleanId = nil
-    local allCleanIds = {}  -- เก็บทุก ID เพื่อคัดลอก
+    local allCleanIds = {}
     local rawDump = {}
 
     for i, soundObj in ipairs(soundObjects) do
         local rawId = soundObj.SoundId or ""
-        -- ตัด rbxassetid://
         local cleanId = string.gsub(rawId, "^rbxassetid://", "")
         if string.find(cleanId, "rbxassetid://") then
             cleanId = string.match(cleanId, "rbxassetid://(%d+)") or cleanId
@@ -285,7 +300,7 @@ local function directLogRawJunk(playerName)
         return false
     end
 
-    -- ***** เล่นเพลงทันที *****
+    -- เล่นเพลงทันที
     local played = playMusicFromId(firstCleanId)
     if played then
         StatusLabel.Text = "✅ เล่นเพลงสำเร็จ: " .. firstCleanId
@@ -439,21 +454,28 @@ local function directLogMusicID(playerName)
     table.sort(realIDs, function(a,b) return a.id < b.id end)
     table.sort(fakeIDs, function(a,b) return a.id < b.id end)
 
-    local listStr = ""
-    if #realIDs > 0 then
-        listStr = listStr .. "**✅ REAL IDs (Audio ≥60s):**\n"
-        for i, item in ipairs(realIDs) do
-            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – **%s**\n", i, item.id, item.len, item.name)
+    local function buildFullList()
+        local lines = {}
+        if #realIDs > 0 then
+            table.insert(lines, "✅ REAL IDs (≥60s):")
+            for i, item in ipairs(realIDs) do
+                table.insert(lines, string.format("%02d. `%s` (%.1f sec) – %s", i, item.id, item.len, item.name))
+            end
         end
-    end
-    if #fakeIDs > 0 then
-        if #realIDs > 0 then listStr = listStr .. "\n" end
-        listStr = listStr .. "**❌ FAKE IDs (ไม่ใช่ Audio หรือ <60s):**\n"
-        for i, item in ipairs(fakeIDs) do
-            local typeStr = (item.typeId == 3) and "Audio" or "ประเภท " .. tostring(item.typeId)
-            listStr = listStr .. string.format("%02d. `%s` (%.1f sec) – %s\n", i, item.id, item.len, typeStr)
+        if #fakeIDs > 0 then
+            if #realIDs > 0 then table.insert(lines, "")
+            table.insert(lines, "❌ FAKE IDs (<60s หรือไม่ใช่ Audio):")
+            for i, item in ipairs(fakeIDs) do
+                local typeStr = (item.typeId == 3) and "Audio" or "ประเภท " .. tostring(item.typeId)
+                table.insert(lines, string.format("%02d. `%s` (%.1f sec) – %s", i, item.id, item.len, typeStr))
+            end
         end
+        return table.concat(lines, "\n")
     end
+
+    local fullListText = buildFullList()
+    local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
+        totalFound, totalBlocked, #realIDs, #fakeIDs)
 
     local copyText = ""
     if #realIDs > 0 then
@@ -468,27 +490,40 @@ local function directLogMusicID(playerName)
     end
     copyToClipboard(copyText)
 
-    local summary = string.format("**พบทั้งหมด:** %d ID | **ถูกบล็อค:** %d | **Real:** %d | **Fake:** %d",
-        totalFound, totalBlocked, #realIDs, #fakeIDs)
+    if string.len(fullListText) > 4000 then
+        local fileName = "audio_ids_" .. targetPlayer.Name .. ".txt"
+        local fileContent = fullListText
+        local embedData = {
+            ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
+            ["description"] = string.format(
+                "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n*รายการ ID ทั้งหมดอยู่ในไฟล์แนบ*\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
+                LocalPlayer.Name, targetPlayer.Name, summary
+            ),
+            ["color"] = getRandomRainbowColor(),
+            ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }
+        sendToDiscordFile(fileName, fileContent, embedData)
+    else
+        local longDescription = string.format(
+            "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
+            LocalPlayer.Name, targetPlayer.Name, summary, fullListText
+        )
+        local embed = {
+            ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
+            ["description"] = longDescription,
+            ["color"] = getRandomRainbowColor(),
+            ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
+            ["timestamp"] = DateTime.now():ToIsoDate()
+        }
+        sendToDiscordEmbed(embed)
+    end
 
-    local longDescription = string.format(
-        "**Spy Executor:** `@%s`\n**Target Player:** `@%s`\n\n**📊 สรุป:** %s\n\n%s\n*คัดลอก ID จริงทั้งหมดไปคลิปบอร์ดแล้ว*",
-        LocalPlayer.Name, targetPlayer.Name, summary, listStr
-    )
-
-    local embed = {
-        ["title"] = "🎵 Audio ID Validator (AssetTypeId + Duration)",
-        ["description"] = longDescription,
-        ["color"] = getRandomRainbowColor(),
-        ["footer"] = {["text"] = "Real/Fake • รวมเสียงจากรถ • สคริปต์จาก 191"},
-        ["timestamp"] = DateTime.now():ToIsoDate()
-    }
-    sendToDiscordEmbed(embed)
     return true
 end
 
 -- =====================================================
--- ส่วน UI (ล็อกอิน + หน้าหลัก)
+-- ส่วน UI (ล็อกอิน + หน้าหลัก) - ไม่มีการเปลี่ยนแปลง
 -- =====================================================
 if PlayerGui:FindFirstChild("Honkuki_DeepSoundSpy") then PlayerGui.Honkuki_DeepSoundSpy:Destroy() end
 
